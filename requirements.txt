@@ -1,0 +1,8 @@
+requests
+beautifulsoup4
+lxml
+markdownify
+python-frontmatter
+python-dotenv
+feedparser
+tqdm
