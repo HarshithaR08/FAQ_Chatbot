@@ -1,0 +1,27 @@
+# Description: Contains global university sitemaps, school of computing sitemaps, indexes, sub pages & pages that are not discovered in sitemaps or api
+# Date: 26 Sep 2025 
+
+site:
+base: "https://www.montclair.edu" #global
+soc: "https://www.montclair.edu/school-of-computing" #soc
+
+sitemaps_indexes:
+- "https://www.montclair.edu/wp-sitemap.xml"
+- "https://www.montclair.edu/school-of-computing/wp-sitemap.xml"
+
+# filter out url's based on current scope
+include_prefixes:
+  - "/school-of-computing/"     # school of computing 
+  - "/red-hawk-central/registrar/"        # registrar, add or drop, contact hours
+  - "/global/"                  # office of global engagement
+  - "/policies/"                # policies & procedures
+  - "/student-services/"        # important dates , details and deadlines
+  
+# Add manually if any pages or pdf does not appear in sitemap
+manual: []
+
+# File output locations
+paths:
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  url_list_csv: "data/url_list.csv"
