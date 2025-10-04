@@ -1,6 +1,20 @@
-.venv/
-__pycache__/
-data/
+# secrets
 .env
-.sfdx/
+.env.*
+*.pem
+*.key
+*.p12
+id_rsa*
+credentials*.json
+
+# local caches
+__pycache__/
+.venv/
+.DS_Store
+
+# editor
 .vscode/
+.sfdx/
+
+# data outputs (if you don’t want them public)
+data/
