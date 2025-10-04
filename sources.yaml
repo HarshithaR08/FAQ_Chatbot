@@ -1,24 +1,147 @@
+# Developer Name: Harshitha
 # Description: Contains global university sitemaps, school of computing sitemaps, indexes, sub pages & pages that are not discovered in sitemaps or api
 # Date: 26 Sep 2025 
 
 site:
-base: "https://www.montclair.edu" #global
-soc: "https://www.montclair.edu/school-of-computing" #soc
+  base: "https://www.montclair.edu"                  # global
+  soc: "https://www.montclair.edu/school-of-computing"  # SoC
 
-sitemaps_indexes:
-- "https://www.montclair.edu/wp-sitemap.xml"
-- "https://www.montclair.edu/school-of-computing/wp-sitemap.xml"
+# Sitemap indexes to seed discovery
+sitemaps:
+  - "https://www.montclair.edu/wp-sitemap.xml"
+  - "https://www.montclair.edu/school-of-computing/wp-sitemap.xml"
+  - "https://www.montclair.edu/policies/wp-sitemap.xml"           # policy documents
+  - "https://www.montclair.edu/red-hawk-central/wp-sitemap.xml"   # registrar + services
+  - "https://www.montclair.edu/student-services/wp-sitemap.xml"   # student resources
+  - "https://www.montclair.edu/global/wp-sitemap.xml"             # OGE
+  - "https://www.montclair.edu/graduate/wp-sitemap.xml"
+  - "https://www.montclair.edu/combined-programs/wp-sitemap.xml"
+  - "https://www.montclair.edu/information-technology/wp-sitemap.xml"
+  - "https://www.montclair.edu/student-center/wp-sitemap.xml"
+
+# Buckets (regex runs against URL PATH, e.g., "/policies/academic-integrity/")
+buckets:
+  - name: soc
+    include:
+      - "^/school-of-computing/($|[^?]+)"
+    exclude:
+      - "^/school-of-computing/(19|20)\\d{2}/"   # year archives
+      - "^/school-of-computing/(author|category|tag)/"
+      - "/page/\\d+/?$"
+      - "/amp/?$"
+
+  - name: registrar
+    include:
+      - "^/red-hawk-central/registrar/($|[^?]+)"
+
+  - name: policies
+    # keep individual policy pages; drop some hubs
+    include:
+      - "^/policies/(?!category/|responsible-office/|all-policies/?$)[^?]+$"
+      - "^/policies/all-policies/[^/][^?]+$"     # allow detail pages under /all-policies/
+
+  - name: student-services
+    include:
+      - "^/student-services/($|[^?]+)"
+    exclude:
+      - "^/student-services/(19|20)\\d{2}/"      # dated news posts
+      - "/page/\\d+/?$"
+
+  - name: oge
+    include:
+      - "^/global/($|[^?]+)"
+    exclude:
+      - "^/global/(19|20)\\d{2}/"                # dated news posts
+      - "/page/\\d+/?$"
+ 
+  # Graduate program details
+  - name: grad-programs
+    include:
+      - "^/graduate/programs-of-study/(computer-science-ms|computer-science-combined-bsms|computational-linguistics-ms|cybersecurity-ms|data-science-ms|information-technology-ms|computing-technology-certificate)/?$"
+
+  # Combined programs (CS/IT/Data only)
+  - name: combined-programs
+    include:
+      - "^/combined-programs/(programs-of-study/)?(computer-science-.*|information-technology-.*|data-science-.*)/?$"
+      - "^/combined-programs/computer-science-combined-bs-ms/?$"   # the specific slug in your list
+
+  # Red Hawk services (non-registrar)
+  - name: red-hawk-services
+    include:
+      - "^/red-hawk-central/contact/?$"
+      - "^/red-hawk-central/services/academic-advising/?$"
+      - "^/red-hawk-central/waitlist-for-students/?$"
+      - "^/red-hawk-central/financial-aid/.+?$"          # allow deep paths like .../sap-regulations/...
+
+  # IT policies / service desk
+  - name: it-policies
+    include:
+      - "^/information-technology/it-policies-and-procedures/[^/][^?]+/?$"
+      - "^/information-technology/it-service-desk/?$"
+
+  # Student Center
+  - name: student-center
+    include:
+      - "^/student-center/(reservable-rooms|scheduling)/?$"
+
+  # Policy PDFs
+  - name: policies-pdf
+    include:
+      - "^/policies/wp-content/uploads/.*\\.pdf$"
+
+  # University policy PDFs (older path)
+  - name: university-policies-pdf
+    include:
+      - "^/university-policies/wp-content/uploads/.*\\.pdf$"
+
+    # Red Hawk Central → Student Accounts (costs, deadlines, payment options)
+  - name: rhc-student-accounts
+    include:
+      - "^/red-hawk-central/student-accounts/[^?]+$"
+
+  # Graduate admissions "How to Apply" (and its subpages)
+  - name: grad-how-to-apply
+    include:
+      - "^/graduate/how-to-apply(/[^?]+)?/?$"   # matches /graduate/how-to-apply and deeper pages
+
+  # Site-wide uploads PDFs (covers HIPAA, fact sheets, etc. not under /policies/)
+  - name: uploads-pdf
+    include:
+      - "^/wp-content/uploads/.*\\.pdf$"
+
+
+
+# Global skip rules (apply to ALL paths before bucketing)
+# Use these to drop content you never want anywhere.
+exclude_patterns:
+  - "\\?(utm_|fbclid=)"                 # tracking query strings
+  - "\\.(jpg|jpeg|png|gif|svg|webp)$"   # image files
+  - "^//"                               # protocol-relative externals (//example.com)
+  - "^/~"                               # personal homepages (/~username)
+  - "/profilepages/"                    # legacy profile pages
+  - "/author/|/category/|/tag/"         # taxonomy archives
+  - "/\\d{4}/\\d{2}/"                   # date-based posts (/2025/09/)
+  - "/events/\\d{4}/\\d{2}/"            # event archives
+  - "/page/\\d+/?$"                     # pagination (/page/2/)
+  - "/feed/$"                           # RSS endpoints
+  - "/wp-json/"                         # REST root
+  - "^/csam/"                           # College of Science & Math pages
+  - "^/human-resources/"                # Human Resource pages
+  - "^/pseg-sustainability-institute"   # out of scope
+  - "^/newscenter/"                     # news articles (not FAQ content)
 
 # filter out url's based on current scope
 include_prefixes:
-  - "/school-of-computing/"     # school of computing 
-  - "/red-hawk-central/registrar/"        # registrar, add or drop, contact hours
-  - "/global/"                  # office of global engagement
-  - "/policies/"                # policies & procedures
-  - "/student-services/"        # important dates , details and deadlines
+  - "/school-of-computing/"           # school of computing 
+  - "/red-hawk-central/registrar/"    # registrar, add or drop, contact hours
+  - "/global/"                        # office of global engagement
+  - "/policies/"                      # policies & procedures
+  - "/student-services/"              # important dates , details and deadlines
   
 # Add manually if any pages or pdf does not appear in sitemap
-manual: []
+manual:
+  - "https://www.montclair.edu/university-policies/wp-content/uploads/sites/205/2018/08/Account-Management-Policy-1.0.pdf"
+  - "https://www.montclair.edu/policies/wp-content/uploads/sites/205/2019/03/Procurement_Policies.pdf"
 
 # File output locations
 paths:
