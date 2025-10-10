@@ -6,3 +6,7 @@ python-frontmatter
 python-dotenv
 feedparser
 tqdm
+pdfminer.six
+python-frontmatter
+faiss-cpu
+sentence-transformers

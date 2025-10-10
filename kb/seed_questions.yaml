@@ -1,0 +1,38 @@
+# Minimal starter set 
+# List of seed questions and keyword hints
+seeds:
+  - topic: withdrawal
+    question: "What is the course withdrawal deadline?"
+    must_any: ["withdrawal", "withdraw", "drop"]
+    prefer_any: ["deadline", "date", "last day"]
+    max_answer_chars: 900
+
+  - topic: grading
+    question: "How does pass/fail grading work?"
+    must_any: ["pass/fail", "pass fail", "grading"]
+    prefer_any: ["policy", "criteria", "eligibility"]
+    max_answer_chars: 900
+
+  - topic: academic-integrity
+    question: "What counts as academic dishonesty?"
+    must_any: ["academic integrity", "dishonesty", "plagiarism", "cheating"]
+    prefer_any: ["sanction", "violation", "policy"]
+    max_answer_chars: 900
+
+  - topic: leave-of-absence
+    question: "How do I request a leave of absence?"
+    must_any: ["leave of absence", "LOA", "medical leave"]
+    prefer_any: ["request", "procedure", "form"]
+    max_answer_chars: 900
+
+  - topic: advising
+    question: "How do I contact academic advising?"
+    must_any: ["advising"]
+    prefer_any: ["hours", "contact", "appointment"]
+    max_answer_chars: 700
+
+  - topic: oge
+    question: "How do I apply for study abroad?"
+    must_any: ["study abroad", "global engagement", "OGE"]
+    prefer_any: ["apply", "application", "eligibility"]
+    max_answer_chars: 900

@@ -1,12 +1,13 @@
 # Developer Name: Harshitha
-# Convert fetched HTML to clean Markdown.
-# Removes obvious chrome (nav/header/footer)
+# Description: Convert fetched HTML to clean Markdown.
+# Removes obvious chrome (nav/header/footer/menu/site header/site footer/menu)
 # Keeps headings/lists/tables
 # Returns a compact Markdown string
 
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 
+# Remove page chrome by css selectors
 REMOVALS = [
     "nav", "header", "footer",
     ".site-footer", ".site-header", ".menu", ".breadcrumbs",

@@ -1,41 +1,44 @@
 # Developer Name: Harshitha
-# Description: Contains global university sitemaps, school of computing sitemaps, indexes, sub pages & pages that are not discovered in sitemaps or api
+# Description: Discovery config for Montclair State University FAQ bot
+# Contains global university sitemaps, school of computing sitemaps, indexes, sub pages & pages that are not discovered in sitemaps or api
 # Date: 26 Sep 2025 
 
 site:
-  base: "https://www.montclair.edu"                  # global
+  base: "https://www.montclair.edu"                     # global - used for sanity
   soc: "https://www.montclair.edu/school-of-computing"  # SoC
+
 
 # Sitemap indexes to seed discovery
 sitemaps:
-  - "https://www.montclair.edu/wp-sitemap.xml"
-  - "https://www.montclair.edu/school-of-computing/wp-sitemap.xml"
-  - "https://www.montclair.edu/policies/wp-sitemap.xml"           # policy documents
-  - "https://www.montclair.edu/red-hawk-central/wp-sitemap.xml"   # registrar + services
-  - "https://www.montclair.edu/student-services/wp-sitemap.xml"   # student resources
-  - "https://www.montclair.edu/global/wp-sitemap.xml"             # OGE
-  - "https://www.montclair.edu/graduate/wp-sitemap.xml"
-  - "https://www.montclair.edu/combined-programs/wp-sitemap.xml"
-  - "https://www.montclair.edu/information-technology/wp-sitemap.xml"
-  - "https://www.montclair.edu/student-center/wp-sitemap.xml"
+  - "https://www.montclair.edu/wp-sitemap.xml"                         # global
+  - "https://www.montclair.edu/school-of-computing/wp-sitemap.xml"     # soc
+  - "https://www.montclair.edu/policies/wp-sitemap.xml"                # policy documents
+  - "https://www.montclair.edu/red-hawk-central/wp-sitemap.xml"        # registrar + services
+  - "https://www.montclair.edu/student-services/wp-sitemap.xml"        # student resources
+  - "https://www.montclair.edu/global/wp-sitemap.xml"                  # OGE
+  - "https://www.montclair.edu/graduate/wp-sitemap.xml"                # grad programs
+  - "https://www.montclair.edu/combined-programs/wp-sitemap.xml"       # combined programs
+  - "https://www.montclair.edu/information-technology/wp-sitemap.xml"  # IT policies
+  - "https://www.montclair.edu/student-center/wp-sitemap.xml"          # student center
 
-# Buckets (regex runs against URL PATH, e.g., "/policies/academic-integrity/")
+
+# Buckets (regex runs against URL PATH (not full URL), e.g., "/policies/academic-integrity/")
 buckets:
   - name: soc
     include:
       - "^/school-of-computing/($|[^?]+)"
     exclude:
-      - "^/school-of-computing/(19|20)\\d{2}/"   # year archives
-      - "^/school-of-computing/(author|category|tag)/"
-      - "/page/\\d+/?$"
-      - "/amp/?$"
+      - "^/school-of-computing/(19|20)\\d{2}/"                         # drop year archives
+      - "^/school-of-computing/(author|category|tag)/"                 # drop taxanomies
+      - "/page/\\d+/?$"                                                # drop pagination
+      - "/amp/?$"                                                      # drop AMP
 
   - name: registrar
     include:
       - "^/red-hawk-central/registrar/($|[^?]+)"
 
   - name: policies
-    # keep individual policy pages; drop some hubs
+    # keep individual policy pages; drop some hubs, skip big hubs except detail pages under /all-policies/
     include:
       - "^/policies/(?!category/|responsible-office/|all-policies/?$)[^?]+$"
       - "^/policies/all-policies/[^/][^?]+$"     # allow detail pages under /all-policies/
@@ -44,14 +47,14 @@ buckets:
     include:
       - "^/student-services/($|[^?]+)"
     exclude:
-      - "^/student-services/(19|20)\\d{2}/"      # dated news posts
+      - "^/student-services/(19|20)\\d{2}/"      # drop dated news posts
       - "/page/\\d+/?$"
 
   - name: oge
     include:
       - "^/global/($|[^?]+)"
     exclude:
-      - "^/global/(19|20)\\d{2}/"                # dated news posts
+      - "^/global/(19|20)\\d{2}/"                # drop dated news posts
       - "/page/\\d+/?$"
  
   # Graduate program details
@@ -110,6 +113,76 @@ buckets:
       - "^/wp-content/uploads/.*\\.pdf$"
 
 
+# Further narrow down the 'policies' bucket to topics under current scope.
+# URL allow-list for policies (lets in likely matches incl. synonyms)
+policy_focus_allowlist:
+  # direct slugs (keep)
+  - "^/policies/all-policies/class-absence-documentation(/|$)"
+  - "^/policies/all-policies/academic-integrity(/|$)"
+  - "^/policies/all-policies/grading(/|$)"
+  - "^/policies/all-policies/withdrawal(/|$)"
+  - "^/policies/all-policies/leave-of-absence(/|$)"
+  # under /policies/all-policies/ (new)
+  - "^/policies/all-policies/academic-integrity(/|$)"
+  - "^/policies/all-policies/grading(/|$)"
+  - "^/policies/all-policies/withdrawal(/|$)"
+  - "^/policies/all-policies/leave-of-absence(/|$)"
+  # loose variants (optional, also add all-policies versions)
+  - "^/policies/(all-policies/)?[^/]*integrity[^/]*/?$"
+  - "^/policies/(all-policies/)?[^/]*misconduct[^/]*/?$"
+  - "^/policies/(all-policies/)?[^/]*grading[^/]*/?$"
+  - "^/policies/(all-policies/)?[^/]*withdraw[^/]*/?$"
+  - "^/policies/(all-policies/)?[^/]*leave[^/]*/?$"
+  - "^/policies/(all-policies/)?[^/]*loa[^/]*/?$"
+
+
+# Topic lexicon for content check (post-filter)
+# Lexicon used by policy_postfilter.py to keep only on-topic policy files.
+policy_topic_lexicon:
+  academic-integrity:
+    any:
+      - "academic integrity"
+      - "plagiarism"
+      - "cheating"
+      - "misconduct"
+      - "honor code"
+    must_one_of: []
+  grading:
+    any:
+      - "grading"
+      - "grades"
+      - "grade policy"
+      - "pass/fail"
+      - "incomplete"
+    must_one_of: []
+  withdrawal:
+    any:
+      - "withdraw"
+      - "withdrawal"
+      - "course withdrawal"
+      - "drop"
+      - "unenroll"
+    must_one_of: []
+  leave-of-absence:
+    any:
+      - "leave of absence"
+      - "loa"
+      - "medical leave"
+      - "personal leave"
+      - "leave request"
+    must_one_of: []
+  # NEW
+  class-absence:
+    any:
+      - "class absence"
+      - "absence documentation"
+      - "doctor's note"
+      - "excused absence"
+      - "attendance"
+      - "missed class"
+    must_one_of: []
+
+
 
 # Global skip rules (apply to ALL paths before bucketing)
 # Use these to drop content you never want anywhere.
@@ -130,6 +203,7 @@ exclude_patterns:
   - "^/pseg-sustainability-institute"   # out of scope
   - "^/newscenter/"                     # news articles (not FAQ content)
 
+
 # filter out url's based on current scope
 include_prefixes:
   - "/school-of-computing/"           # school of computing 
@@ -137,11 +211,13 @@ include_prefixes:
   - "/global/"                        # office of global engagement
   - "/policies/"                      # policies & procedures
   - "/student-services/"              # important dates , details and deadlines
-  
+
+
 # Add manually if any pages or pdf does not appear in sitemap
 manual:
   - "https://www.montclair.edu/university-policies/wp-content/uploads/sites/205/2018/08/Account-Management-Policy-1.0.pdf"
   - "https://www.montclair.edu/policies/wp-content/uploads/sites/205/2019/03/Procurement_Policies.pdf"
+
 
 # File output locations
 paths:

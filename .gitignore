@@ -1,4 +1,4 @@
-# secrets
+# SECRETS
 .env
 .env.*
 !/.env.example
@@ -8,14 +8,31 @@
 id_rsa*
 credentials*.json
 
-# local caches
+# PYTHON + SYSTEM CACHES
 __pycache__/
+*.pyc
 .venv/
 .DS_Store
 
-# editor
+# EDITOR / TOOLS
 .vscode/
 .sfdx/
 
-# data outputs (if you don’t want them public)
+# DATA OUTPUTS (fetched HTML/PDF/Markdown files)
 data/
+!data/.gitkeep      
+*-pdf.md
+
+# RETRIEVAL / VECTOR INDEX (Step-4 outputs)
+rag/index.faiss
+rag/meta.jsonl
+rag/embed_index.py
+rag/search_local.py
+rag/chunks.jsonl
+rag/*.db
+rag/*.pkl
+!rag/.gitkeep        
+
+# LOGS
+logs/
+*.log

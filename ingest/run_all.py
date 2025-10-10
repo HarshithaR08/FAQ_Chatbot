@@ -1,10 +1,9 @@
 # Developer Name: Harshitha
-# Read sources.yaml
-# Build URL list from sitemaps (+ manual)
-# Print first 15 URLs for verification
-# Fetch HTML/PDF → save raw
-# Convert HTML → Markdown (+ front-matter)
-# Create stub Markdown for PDFs (you can extract text later)
+# Desccription: Loads config sources.yaml,Build URL list from sitemaps (including any manual URL's)
+# For each URL:
+                # if its a PDF - download file + write a stub Markdown with metadata
+                # if its HTML - fetch page, save raw, convert to Markdown, add metadata (front matter)
+
 
 import os, re, logging, time, urllib.parse, yaml, requests
 from datetime import datetime
@@ -13,12 +12,16 @@ from html_to_markdown import clean_html_to_markdown
 
 USER_AGENT = "MSU-FAQ-Bot/0.1 (contact: ramakrishnah1@montclair.edu)"
 
+
 # Build a file path under base_dir that mirrors the URL path.
 # If replace_ext is given (e.g., '.pdf' or '-pdf.md'), it replaces the file's extension.
 # Ensures parent directory exists.
 def path_from_url(base_dir: str, url: str, replace_ext: str | None = None) -> str:
     rel = urllib.parse.urlparse(url).path.lstrip("/")  # e.g., policies/wp-content/.../file.pdf
     head, tail = os.path.split(rel)
+    # If the URL ends with '/', os.path.split gives tail == ''
+    if not tail:
+        tail = "index"  # <- ensure a filename
     if replace_ext is not None:
         stem, _ = os.path.splitext(tail)
         tail = stem + replace_ext

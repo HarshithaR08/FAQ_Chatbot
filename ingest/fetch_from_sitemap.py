@@ -1,5 +1,5 @@
 # Developer Name: Harshitha
-# Description: Fetch & parse sitemap indexes, collect child sitemap URLs, extract page URLs.
+# Pipeline Description: Fetch & parse sitemap indexes, collect child sitemap URLs, extract page URLs.
 # Then filter them using bucket regex rules from sources.yaml. Writes url,lastmod,bucket to CSV.
 # Date: 26 Sep 2025 
 
@@ -28,6 +28,7 @@ def setup_logger():
 
 
 # HTTP helper - send get request to the server with USER_AGENT header
+# download sitemap XML safely (with headers + logging)
 def get_http(url: str, timeout=20) -> str | None:
     logging.debug(f"GET {url}")
     try:
@@ -43,7 +44,7 @@ def get_http(url: str, timeout=20) -> str | None:
         return None
 
 
-# extract child sitemap URLs from the index
+# extract child sitemap URLs from the index file
 # Input: <sitemapindex> XML string
 # Output: list of child sitemap URLs
 def parse_index_for_sitemaps(xml_text: str) -> List[str]:
@@ -59,6 +60,7 @@ def parse_index_for_sitemaps(xml_text: str) -> List[str]:
 
 
 # extract sitemap pages/posts to fetch list of (loc, lastmod) from a sitemap **page** (not index).
+# extract <loc>, <lastmod> entries from sitemap page
 # Input: <urlset> XML string
 # Output: list of (loc, lastmod)
 def parse_sitemap_for_urls(xml_text: str) -> List[Tuple[str, str]]:
@@ -127,8 +129,14 @@ def compile_rules(cfg):
     global_excl = [re.compile(p) for p in cfg.get("exclude_patterns", [])]
     return compiled_buckets, global_excl
 
+# for policies list
+def compile_policy_allowlist(cfg):
+    pats = cfg.get("policy_focus_allowlist", [])
+    return [re.compile(p) for p in pats]
+
+
 def first_matching_bucket(path: str, compiled_buckets) -> str | None:
-    """Return bucket name if path matches include and not exclude."""
+    #Return bucket name if path matches include and not exclude.
     for b in compiled_buckets:
         if any(r.search(path) for r in b["include"]):
             if any(rx.search(path) for rx in b["exclude"]):
@@ -139,13 +147,14 @@ def first_matching_bucket(path: str, compiled_buckets) -> str | None:
 def globally_excluded(path: str, global_excl) -> bool:
     return any(rx.search(path) for rx in global_excl)
 
+# this function applies regex-based inclusion/exclusion logic
 # Input: [(url, lastmod)]
-# Output: [(url, lastmod, bucket)]
-    
+# Output: [(url, lastmod, bucket)]  
 def filter_with_buckets(urls: List[Tuple[str, str]], cfg) -> List[Tuple[str, str, str]]:
     compiled_buckets, global_excl = compile_rules(cfg)
+    policy_allow = compile_policy_allowlist(cfg)
     kept = []
-    dropped_global = dropped_no_bucket = 0
+    dropped_global = dropped_no_bucket = dropped_policy_not_focus = 0
 
     for (u, lm) in urls:
         path = urlparse(u).path
@@ -158,14 +167,20 @@ def filter_with_buckets(urls: List[Tuple[str, str]], cfg) -> List[Tuple[str, str
         if bucket is None:
             dropped_no_bucket += 1
             continue
+        # Enforce allow-list only for policies
+        if bucket == "policies" and policy_allow:
+            if not any(p.search(path) for p in policy_allow):
+                dropped_policy_not_focus += 1
+                continue
         kept.append((u, lm, bucket))
 
     logging.info(
-        f"Bucket filter: kept={len(kept)}, "
-        f"dropped_global={dropped_global}, dropped_no_bucket={dropped_no_bucket}"
+        "Bucket filter: kept=%d, dropped_global=%d, dropped_no_bucket=%d, dropped_policy_not_focus=%d",
+        len(kept), dropped_global, dropped_no_bucket, dropped_policy_not_focus
     )
     return kept
 
+# Removes duplicate url's & Keeps one copy of every unique URL.
 def dedupe_with_bucket(rows: List[Tuple[str, str, str]]) -> List[Tuple[str, str, str]]:
     seen, out = set(), []
     for u, lm, b in rows:
@@ -175,6 +190,7 @@ def dedupe_with_bucket(rows: List[Tuple[str, str, str]]) -> List[Tuple[str, str,
     logging.info(f"Deduped to {len(out)} unique URLs (bucketed)")
     return out
 
+# save final (url, lastmod, bucket) list to disk
 def save_csv_bucket(rows: List[Tuple[str, str, str]], csv_path: str):
     os.makedirs(os.path.dirname(csv_path), exist_ok=True)
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
