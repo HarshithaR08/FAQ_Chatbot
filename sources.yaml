@@ -20,7 +20,45 @@ sitemaps:
   - "https://www.montclair.edu/combined-programs/wp-sitemap.xml"       # combined programs
   - "https://www.montclair.edu/information-technology/wp-sitemap.xml"  # IT policies
   - "https://www.montclair.edu/student-center/wp-sitemap.xml"          # student center
+  - "http://catalog.montclair.edu/sitemap.xml"                         # catalogs
 
+# Cross-Site discovery controls 
+discovery:
+  autositemap: true                # try <domain>/sitemap(.xml) for new domains
+  recheck_interval_days: 7         # how often to rediscover sitemaps
+  last_run_db: "state/last_run.json"
+
+  domain_whitelist:
+    - "montclair.edu"
+    - "www.montclair.edu"
+    - "catalog.montclair.edu"
+
+  # pages we’ll scan for deep links (no need to fetch whole site)
+  seed_pages:
+    - "https://www.montclair.edu/school-of-computing/graduate/"
+    - "https://www.montclair.edu/school-of-computing/undergraduate/"
+    - "http://catalog.montclair.edu/programs/"
+    - "http://catalog.montclair.edu/courses/"
+
+  # regex on URL PATH (no scheme/host/query)
+  path_allowlist:
+    - "^/graduate/programs-of-study/(computer-science|computational-linguistics|cybersecurity|data-science|information-technology)[^/]*/*$"
+    - "^/programs/(computer-science|information-technology|data-science)[^/]*(/|$)"
+    - "^/courses/(cs|csit)[a-z0-9-]*/?$"
+    # Optional if you also remove '^/csam/' from exclude_patterns
+    # - "^/csam/student-success-center/career-services/cooperative-education-and-internships/?$"
+
+  path_blocklist:
+    - "/search"
+    - "\\?(utm_|fbclid=)"
+
+  include_profilepages: false
+
+# centralizes rate limit, timeout, user agent
+crawl:
+  rate_limit_seconds: 0.3
+  timeout_seconds: 40
+  user_agent: "MSU-FAQ-Bot/0.1 (contact: ramakrishnah1@montclair.edu)"
 
 # Buckets (regex runs against URL PATH (not full URL), e.g., "/policies/academic-integrity/")
 buckets:
@@ -61,6 +99,8 @@ buckets:
   - name: grad-programs
     include:
       - "^/graduate/programs-of-study/(computer-science-ms|computer-science-combined-bsms|computational-linguistics-ms|cybersecurity-ms|data-science-ms|information-technology-ms|computing-technology-certificate)/?$"
+      - "^/graduate/programs-of-study/(computer-science-ms|computer-science-combined-bsms|computational-linguistics-ms|cybersecurity-ms|data-science-ms|information-technology-ms|computing-technology-certificate|applied-mathematics-ms)/?$"
+
 
   # Combined programs (CS/IT/Data only)
   - name: combined-programs
@@ -111,7 +151,18 @@ buckets:
   - name: uploads-pdf
     include:
       - "^/wp-content/uploads/.*\\.pdf$"
-
+  
+  # discover catalogs
+  - name: catalog
+    include:
+      - "^/programs/(computer-science|information-technology|data-science|applied-math[^/]*|applied-mathematics[^/]*|game-development[^/]*)/?$"
+      - "^/courses/(cs|csit)[a-z0-9-]*/?$"
+  
+  # online programs
+  - name: online-programs
+    include:
+      - "^/online/graduate-degrees/information-technology-ms-psm/?$"
+  
 
 # Further narrow down the 'policies' bucket to topics under current scope.
 # URL allow-list for policies (lets in likely matches incl. synonyms)

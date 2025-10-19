@@ -36,3 +36,5 @@ rag/*.pkl
 # LOGS
 logs/
 *.log
+
+state/
