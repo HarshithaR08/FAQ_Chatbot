@@ -1,8 +1,6 @@
 # 🧠 MSU FAQ Chatbot — Intelligent Policy Retrieval & Answering System
 
-> **Goal:** Build an AI-powered FAQ chatbot for Montclair State University that answers student questions by grounding responses in official university documents (Registrar, Policies, Global Engagement, SoC, etc.).
-
----
+**Goal:** Build an AI-powered FAQ chatbot for Montclair State University that answers student questions by grounding responses in official university documents (Registrar, Policies, Global Engagement, SoC, etc.).
 
 ## 🚀 Key Features
 
@@ -171,13 +169,13 @@ pip install -r requirements.txt
 
 - 1. Fork this repository.
 - 2. Create a new branch:
-     ```bash
+```bash
      git checkout -b feature/my-feature
-    ```
+```
 - 3. Commit your changes:
-     ```bash
+```bash
      git commit -m "Added new sitemap or fixed bug"
-    ```
+```
 - 4. Push the branch and open a Pull Request.
 
 ---
