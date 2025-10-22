@@ -22,6 +22,9 @@ sitemaps:
   - "https://www.montclair.edu/student-center/wp-sitemap.xml"          # student center
   - "http://catalog.montclair.edu/sitemap.xml"                         # catalogs
 
+# CHANGE (Adaptability Enhancement):
+# Auto-discovery is enabled so new, whitelisted domains can be added by finding their sitemaps
+# and recording them in state/last_run.json (used on future runs).
 # Cross-Site discovery controls 
 discovery:
   autositemap: true                # try <domain>/sitemap(.xml) for new domains
@@ -54,6 +57,8 @@ discovery:
 
   include_profilepages: false
 
+# CHANGE (Incremental Update Logic):
+# Centralized UA, rate-limit, and timeout used during fetching; works with conditional requests (ETag/Last-Modified).
 # centralizes rate limit, timeout, user agent
 crawl:
   rate_limit_seconds: 0.3

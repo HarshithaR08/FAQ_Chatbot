@@ -9,6 +9,8 @@ from typing import List, Tuple
 from bs4 import BeautifulSoup
 
 USER_AGENT = "MSU-FAQ-Bot/0.1 (contact: ramakrishnah1@montclair.edu)"
+# CHANGE (Adaptability Enhancement):
+# Try common sitemap endpoints on new hosts (e.g., catalog.montclair.edu) so we can auto-enroll them.
 AUTO_SITEMAP_CANDIDATES = ["sitemap.xml", "sitemap_index.xml", "wp-sitemap.xml"]
 
 
@@ -19,6 +21,8 @@ def setup_logger():
         datefmt="%H:%M:%S"
     )
 
+# CHANGE (Adaptability Enhancement):
+# Probe a whitelisted domain for a sitemap; if found, we will remember it and use it next runs.
 # auto discover sitemaps for whitelisted new hosts
 def try_autodiscover_sitemap_for_host(host: str, ua: str) -> str | None:
     import requests
@@ -118,6 +122,9 @@ def discover_links(cfg) -> List[Tuple[str, str, str]]:
 
     logging.info(f"Discovery total kept: {len(out)}")
         # Optional auto-sitemap discovery for new, whitelisted hosts ===
+    # CHANGE (Adaptability Enhancement):
+    # If enabled, auto-detect sitemaps for new whitelisted hosts we saw in discovered links,
+    # then store them in state/last_run.json so run_all.py will include them next time.
     if disc.get("autositemap"):
         import json, os
         seen_hosts = set()
@@ -156,6 +163,8 @@ def discover_links(cfg) -> List[Tuple[str, str, str]]:
             for sm in new_sitemaps:
                 if sm not in state["autodiscovered_sitemaps"]:
                     state["autodiscovered_sitemaps"].append(sm)
+            # CHANGE (Adaptability Enhancement):
+            # Persist newly found sitemaps so future runs load them automatically (no manual YAML edit needed).
             with open(state_path, "w") as f:
                 json.dump(state, f, indent=2)
             logging.info(f"Auto-discovered sitemaps: {new_sitemaps}")
