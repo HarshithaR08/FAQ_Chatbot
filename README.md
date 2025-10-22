@@ -1,4 +1,4 @@
-# 🧠 MSU FAQ Chatbot — Intelligent Policy Retrieval & Answering System
+# 🧠 MSU FAQ Chatbot — Retrieval-Augmented Answering System for University Resources
 
 **Goal:** Build an AI-powered FAQ chatbot for Montclair State University that answers student questions by grounding responses in official university documents (Registrar, Policies, Global Engagement, SoC, etc.).
 
