@@ -19,9 +19,15 @@ from html_to_markdown import clean_html_to_markdown
 
 
 USER_AGENT = "MSU-FAQ-Bot/0.1 (contact: ramakrishnah1@montclair.edu)"
+
+# CHANGE (Incremental Update Logic):
+# Uses Last-Modified, ETag, or hash comparison from state/fetch_state.json
+# to skip unchanged pages and re-fetch only updated ones.
 STATE_PATH = "state/fetch_state.json"  # stores { url: {etag, last_modified, raw_sha1, last_fetch} }
 
 
+# CHANGE (Incremental Update Logic):
+# Load previously saved per-URL headers and content hashes so we can skip unchanged pages.
 # Load/save a small JSON that remembers per-URL info (etag, last_modified, hash) if present.
 def load_state():
     if os.path.exists(STATE_PATH):
@@ -31,6 +37,8 @@ def load_state():
             return {}
     return {}
 
+
+# CHANGE (Incremental Update Logic):
 # Save the current tracking information (state) about each URL (per-URL) into a file on disk.
 # This function saves crawler’s progress so next time it runs, it knows which pages have already been processed
 def save_state(state):
@@ -42,6 +50,8 @@ def save_state(state):
 def sha1(text: str) -> str:
     return hashlib.sha1(text.encode("utf-8")).hexdigest()
 
+# CHANGE (Incremental Update Logic):
+# Conditional GET: sends If-None-Match / If-Modified-Since using saved ETag/Last-Modified.
 # Below function contains code to ask the server "has this page changed?"
 # Sends If-None-Match (ETag) and/or If-Modified-Since (Last-Modified) if we have them.
 # If server replies 304 => unchanged -> return (None, "not-modified", headers)
@@ -139,8 +149,10 @@ def main():
     proc_dir = cfg["paths"]["processed_dir"]
     os.makedirs(raw_dir, exist_ok=True)
     os.makedirs(proc_dir, exist_ok=True)
-
-    # Base sitemaps from YAML + any auto-discovered sitemaps stored by discovery
+    
+    # CHANGE (Adaptability Enhancement):
+    # Merge sitemaps from YAML with any auto-discovered sitemaps (saved by discovery_links.py)
+    # so new sub-sites (e.g., catalog) are picked up automatically on future runs.
     sitemaps = list(cfg["sitemaps"])
     sitemaps += load_autodiscovered_sitemaps(cfg)   # include auto-found sitemaps (e.g., catalog)
     sitemaps = list(dict.fromkeys(sitemaps))        # dedupe, keep order
@@ -206,6 +218,8 @@ def main():
                 with open(out_md_path, "w", encoding="utf-8") as f:
                     f.write(write_front_matter_markdown("(PDF content not yet extracted)", meta))
                 # OPTIONAL: remember headers for PDFs, so a later run can skip unchanged PDF
+                # CHANGE (Incremental Update Logic):
+                # Remember PDF ETag/Last-Modified so we can skip re-downloading if unchanged later.
                 state[url] = {
                     "etag": r.headers.get("ETag"),
                     "last_modified": r.headers.get("Last-Modified"),
@@ -217,23 +231,26 @@ def main():
                 time.sleep(0.2)
                 continue
 
-            # HTML branch (CONDITIONAL + HASH)
-            # 1) Ask the server if the page changed since last time.
+            # CHANGE (Incremental Update Logic):
+            # Step 1: Ask the server if the page changed since last run (ETag/Last-Modified).
             html, status, hdrs = fetch_text_conditional(url, state)
 
-            # 2) If server replied 304 Not Modified → skip expensive work.
+            # CHANGE (Incremental Update Logic):
+            # Step 2: If 304 Not Modified, skip expensive work (fast & polite).
             if status == "not-modified":
                 logging.info(f"[{i}/{len(merged)}] ↺ SKIP (304) [{bucket}|{source}] {url}")
                 continue
 
-            # 3) If the server returned 200 with body, still skip if body hash is unchanged.
+            # CHANGE (Incremental Update Logic):
+            # Step 3: Even if server returned 200, skip if the cleaned Markdown hash hasn't changed.
             md_body = clean_html_to_markdown(html)   # already in your code
             content_hash = sha1(md_body)             # hash the cleaned content
             if state.get(url, {}).get("content_sha1") == content_hash:
                 logging.info(f"[{i}/{len(merged)}] ↺ SKIP (unchanged content) [{bucket}|{source}] {url}")
                 continue
 
-            # 4) Save raw HTML to mirror path.
+            # CHANGE (Incremental Update Logic):
+            # Step 4: Save fresh headers + content hash so next run can skip if unchanged.
             raw_path = path_from_url(raw_dir, url, replace_ext=".html")
             with open(raw_path, "w", encoding="utf-8") as f:
                 f.write(html)
