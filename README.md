@@ -1,67 +1,205 @@
-# 📘 FAQ Chatbot – School of Computing
+# 🧠 MSU FAQ Chatbot — Intelligent Policy Retrieval & Answering System
 
-## 🎯 Project Overview
-This project builds a **FAQ-style chatbot** to help students quickly get answers to curriculum, policy, administrative, and resource questions.  
-- Knowledge source: **official university documents** (course catalogs, policies, registrar guides, resources).  
-- Core pipeline: **Collect → Clean → Chunk → Embed → Retrieve → Answer**.  
-- Prototype will use a **FastAPI backend** and a **Streamlit frontend**, always citing official sources.
+> **Goal:** Build an AI-powered FAQ chatbot for Montclair State University that answers student questions by grounding responses in official university documents (Registrar, Policies, Global Engagement, SoC, etc.).
 
 ---
 
-## 🗂️ Repository Structure
-faq-chatbot/
+## 🚀 Key Features
+
+- **Automated Web Data Ingestion**
+  - Crawls and fetches sitemap + manually added URLs from Montclair’s official sites.
+  - Handles PDFs and HTML content uniformly.
+  - Incrementally updates when pages change (using `Last-Modified`, `ETag`, or hash checks).
+
+- **Document Cleaning & Structuring**
+  - Converts HTML and PDFs into clean Markdown.
+  - Splits long content into small, semantically meaningful chunks (RAG-ready).
+
+- **Semantic Retrieval Engine**
+  - Uses `sentence-transformers/all-MiniLM-L6-v2` to embed chunks.
+  - Stores vectors in **ChromaDB** for fast, semantic similarity search.
+
+- **RAG (Retrieval-Augmented Generation) Architecture**
+  - Retrieves the most relevant policy passages.
+  - Supplies them as context to an LLM (e.g., Mistral-7B or LLaMA 2-Chat) for accurate, grounded answers.
+
+- **Extensible Design**
+  - Supports new departments, sites, or changed URLs via YAML configuration.
+  - Modular structure allows plugging in different embedding or LLM models later.
+
+---
+
+## 🏗️ System Architecture Overview
+
+```text
+                   ┌────────────────────┐
+                   │  Student Question  │
+                   └─────────┬──────────┘
+                             │
+                             ▼
+                   ┌────────────────────┐
+                   │ Embedding Model    │ (MiniLM-L6-v2)
+                   └─────────┬──────────┘
+                             │ vector
+                             ▼
+                ┌──────────────────────────┐
+                │ Vector DB (ChromaDB)     │
+                │ Stores all document chunks│
+                └─────────┬────────────────┘
+                             │ top-k results
+                             ▼
+                ┌──────────────────────────┐
+                │ LLM (Mistral/LLaMA)      │
+                │ Generates grounded answer│
+                └──────────────────────────┘
+```
+---
+
+## 🧩 Repository Structure
+```text
+
+faq_chatbot/
+├── ingest/
+│   ├── fetch_from_sitemap.py        # Crawl + filter sitemap URLs
+│   ├── discovery_links.py           # Discover deep links and adapt to new sites
+│   ├── pdf_to_markdown.py           # Convert policy PDFs to text
+│   ├── run_all.py                   # End-to-end ingestion & conversion pipeline
 │
-├── ingest/ # Data acquisition scripts (sitemap, API, feeds)
 ├── data/
-│ ├── raw/ # Raw downloads (HTML, XML, JSON, PDFs)
-│ └── processed/ # Clean Markdown files with metadata
-├── rag/ # Retrieval pipeline (chunking, embeddings, vector DB)
-├── api/ # FastAPI backend with /ask endpoint
-├── ui/ # Streamlit chatbot interface
-├── eval/ # Evaluation dataset and notebooks
-├── infra/ # Deployment configs (Docker, Nginx) – later
-├── docs/ # Notes, meeting records, designs
-├── .env # Environment variables (local use, not committed)
-├── requirements.txt # Python dependencies
-└── README.md # Project overview and setup guide
+│   ├── raw/                         # Raw HTML/PDF data
+│   ├── processed/                   # Cleaned Markdown files
+│   ├── url_list.csv                 # Master list of discovered URLs
+│
+├── eval/
+│   ├── policy_postfilter.py         # Keep only relevant policy topics
+│   ├── preview_chunks.py            # Preview sample chunks
+│
+├── rag/
+│   ├── chunker.py                   # Split Markdown into smaller sections
+│   ├── chunks.jsonl                 # Chunked text ready for embeddings
+│
+├── vectorstore/
+│   ├── build_index.py               # Create Chroma vector index
+│   ├── query_demo.py                # Query test for semantic retrieval
+│
+├── kb/
+│   ├── build_kb.py                  # Generate Q/A pairs for FAQs
+│
+├── config/
+│   └── sources.yaml                 # Discovery, filtering, and path configuration
+│
+├── README.md                        # Project overview and usage
+├── SECURITY.md                      # Security & commit guidelines
+└── requirements.txt                 # Required dependencies
+```
 
 ---
 
-## 🚀 Getting Started
+## ⚙️ Prerequisites
 
-### 1. Clone the repository
+Python ≥ 3.9
+Virtual environment (venv or conda)
+Dependencies: 
 ```bash
-git clone <your_repo_url>
-cd faq-chatbot
+pip install -r requirements.txt
+```
+---
 
+## 🧰 Quick Start
 
-### 2. Set up virtual environment
 ```bash
-# Create virtual environment
-python3 -m venv .venv
+# 1. Clone repository
+git clone https://github.com/<your_username>/faq_chatbot.git
+cd faq_chatbot
 
-# Activate the environment
-# Mac/Linux
-source .venv/bin/activate
-# Windows
-.\.venv\Scripts\activate
+# 2. Activate virtual environment
+python -m venv .venv
+source .venv/bin/activate   # Mac/Linux
+.venv\Scripts\activate      # Windows
 
-
-### 3. Install dependencies
+# 3. Install dependencies
 pip install -r requirements.txt
 
-### 4. Configure environment
-#Create a .env file in the project root and add:
+# 4. Run the pipeline
+python ingest/run_all.py           # Crawl & convert documents
+python ingest/pdf_to_markdown.py   # Extract text from PDFs
+python eval/policy_postfilter.py   # Filter relevant policies
+python rag/chunker.py              # Split into chunks
+python vectorstore/build_index.py  # Build Chroma vector DB
+python vectorstore/query_demo.py   # Test retrieval
 
-BASE_DOMAIN=https://www.montclair.edu
-SOC_BASE=https://www.montclair.edu/school-of-computing
-WP_API=https://www.montclair.edu/wp-json/wp/v2
+```
 
-### 5. Run ingestion
-# Once ingestion scripts are ready, you’ll run:
-python ingest/run_all.py
+---
 
-#This will:
-Save raw files → data/raw/
-Save cleaned Markdown files → data/processed/
+## 🧠 Configuration
 
+- **Main configuration lives in config/sources.yaml:**
+  - Add new sitemap URLs or manual pages here.
+  - Edit regex rules under buckets to control which URLs are included/excluded.
+  - The system automatically adapts to new external sites using discovery + auto-sitemap detection.
+
+---
+
+## 🧩 Deployment Options (Future)
+
+- Local FastAPI server (for REST API)
+- Streamlit Web UI (for chatbot interface)
+- Cloud deployment via:
+  - Docker container on Azure App Service or AWS Lightsail
+  - Optional GPU inference with Hugging Face Inference API
+
+---
+
+## 💻 Development Environment Setup
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+ 
+- **Folder paths (inside YAML):**
+  - data/raw → stores raw HTML/PDFs
+  - data/processed → cleaned Markdown
+  - rag/chunks.jsonl → chunked knowledge base
+  - ectorstore/chroma/ → persistent ChromaDB index
+
+---
+
+## 🤝 Contribution Guidelines
+
+- 1. Fork this repository.
+- 2. Create a new branch:
+     ```bash
+     git checkout -b feature/my-feature
+    ```
+- 3. Commit your changes:
+     ```bash
+     git commit -m "Added new sitemap or fixed bug"
+    ```
+- 4. Push the branch and open a Pull Request.
+
+---
+
+## 🔒 Security & Commit Policy
+
+📂 See [`SECURITY.md`](./SECURITY.md)
+
+ - Do not commit API keys, credentials, or .env files.
+ - .gitignore includes common sensitive paths (/data/, .venv/, /state/).
+ - Never push raw student or internal documents.
+ - All scraping follows robots.txt and university data-access policies.
+
+---
+
+## 🙏 Acknowledgments
+
+- Montclair State University — School of Computing
+- Faculty Advisors: Prof. Shang, Prof. Wang
+- Contributors: Harshitha Ramakrishna, Imaduddin Syed, Lam Nguyen, Prudhvi Raj Kore
+- Technologies: Python, ChromaDB, Sentence-Transformers, Mistral-7B, Streamlit
+
+---
+
+**📘 This repository is part of the MSU AI FAQ Chatbot project — a prototype system integrating RAG pipelines for student support and policy retrieval.**
