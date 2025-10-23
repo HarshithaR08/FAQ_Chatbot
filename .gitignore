@@ -37,4 +37,9 @@ rag/*.pkl
 logs/
 *.log
 
+data/
 state/
+vectorstore/chroma/
+*.jsonl
+*.pdf
+*.html

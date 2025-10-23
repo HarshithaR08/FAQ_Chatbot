@@ -77,8 +77,8 @@ faq_chatbot/
 │   ├── chunks.jsonl                 # Chunked text ready for embeddings
 │
 ├── vectorstore/
-│   ├── build_index.py               # Create Chroma vector index
-│   ├── query_demo.py                # Query test for semantic retrieval
+│   ├── build_index_retrieval.py     # Create Chroma vector index
+│   ├── test_retrieval_query.py      # Query test for semantic retrieval
 │
 ├── kb/
 │   ├── build_kb.py                  # Generate Q/A pairs for FAQs

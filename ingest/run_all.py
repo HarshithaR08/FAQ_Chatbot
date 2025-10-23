@@ -19,6 +19,8 @@ from html_to_markdown import clean_html_to_markdown
 
 
 USER_AGENT = "MSU-FAQ-Bot/0.1 (contact: ramakrishnah1@montclair.edu)"
+# by default keep FORCE_REWRITE = False, and only temporarily flip it to True when you want to force a clean rebuild (for example, right after deleting data/processed/)
+FORCE_REWRITE = False
 
 # CHANGE (Incremental Update Logic):
 # Uses Last-Modified, ETag, or hash comparison from state/fetch_state.json
@@ -236,16 +238,20 @@ def main():
             html, status, hdrs = fetch_text_conditional(url, state)
 
             # CHANGE (Incremental Update Logic):
-            # Step 2: If 304 Not Modified, skip expensive work (fast & polite).
-            if status == "not-modified":
+            # Step 2: If 304 Not Modified, skip — unless FORCE_REWRITE is True.
+            if status == "not-modified" and not FORCE_REWRITE:
                 logging.info(f"[{i}/{len(merged)}] ↺ SKIP (304) [{bucket}|{source}] {url}")
                 continue
+            # If we forced a rewrite but got 304 (server didn’t send body),
+            # do a normal GET to fetch the HTML so we can re-write files.
+            if status == "not-modified" and FORCE_REWRITE:
+                html = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=60).text
 
             # CHANGE (Incremental Update Logic):
             # Step 3: Even if server returned 200, skip if the cleaned Markdown hash hasn't changed.
             md_body = clean_html_to_markdown(html)   # already in your code
             content_hash = sha1(md_body)             # hash the cleaned content
-            if state.get(url, {}).get("content_sha1") == content_hash:
+            if (state.get(url, {}).get("content_sha1") == content_hash) and not FORCE_REWRITE:
                 logging.info(f"[{i}/{len(merged)}] ↺ SKIP (unchanged content) [{bucket}|{source}] {url}")
                 continue
 
