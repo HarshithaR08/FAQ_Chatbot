@@ -7,7 +7,7 @@ from chromadb.utils import embedding_functions
 CHROMA_DIR = "vectorstore/chroma"
 COLLECTION = "msu_faq_chunks"
 
-# same embedding you used to build the index
+# same embedding used to build the index
 embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
 )

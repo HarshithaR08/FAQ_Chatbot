@@ -8,26 +8,21 @@ from pathlib import Path
 import chromadb
 from chromadb.utils import embedding_functions
 
-# ----------------------------
-# Logging (so you see progress)
-# ----------------------------
+
+# added for debug logs
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)-8s | %(message)s",
     datefmt="%H:%M:%S"
 )
 
-# ----------------------------
-# Config: where files live
-# ----------------------------
+# Configuration path for files
 CHUNKS_JSONL = "rag/chunks.jsonl"          # created by your chunker
 CHROMA_DIR   = "vectorstore/chroma"        # chroma will persist here
 COLLECTION   = "msu_faq_chunks"            # name your collection
 
-# ----------------------------
 # Embeddings: small, fast model
-# ----------------------------
-# sentence-transformers/all-MiniLM-L6-v2 returns 384-d vectors, good quality, CPU-friendly.
+# sentence-transformers/all-MiniLM-L6-v2 returns 384-d vectors
 embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
@@ -40,11 +35,11 @@ def load_chunks(path: str):
                 yield json.loads(line)
 
 def main():
-    # 1) Create (or open) a persistent Chroma client on disk
+    # to create (or open) a persistent Chroma client on disk
     os.makedirs(CHROMA_DIR, exist_ok=True)
     client = chromadb.PersistentClient(path=CHROMA_DIR)
 
-    # 2) Fresh rebuild: drop the whole collection if it exists.
+    # for fresh rebuild: drop the whole collection if it exists.
     #    NOTE: new Chroma requires delete_collection(name=...)
     try:
         client.delete_collection(name=COLLECTION)
@@ -53,14 +48,14 @@ def main():
         # If it didn't exist, that's fine.
         pass
 
-    # 3) Create the collection again (empty), attach our embedding function.
+    # Create the collection again (empty), attach our embedding function.
     coll = client.get_or_create_collection(
         name=COLLECTION,
         embedding_function=embedding_fn,
-        metadata={"hnsw:space": "cosine"}  # cosine similarity is standard
+        metadata={"hnsw:space": "cosine"}  
     )
 
-    # 4) Read chunks and add in batches.
+    # Read chunks and add in batches.
     #    We'll also guard against duplicate IDs *within this run* (JSONL duplicates).
     ids, texts, metadatas = [], [], []
     BATCH = 500
@@ -80,7 +75,7 @@ def main():
             continue
         seen_ids.add(cid)
 
-        ids.append(cid)                   # unique id (sha1 from your chunker)
+        ids.append(cid)                   # unique id (sha1 from the chunker)
         texts.append(ch["text"])          # the content to embed
         metadatas.append({
             "url": ch.get("source_url",""),
