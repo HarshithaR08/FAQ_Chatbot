@@ -1,282 +1,322 @@
-# Developer Name: Harshitha
-# Description: Discovery config for Montclair State University FAQ bot
-# Contains global university sitemaps, school of computing sitemaps, indexes, sub pages & pages that are not discovered in sitemaps or api
-# Date: 26 Sep 2025 
+# Developer: Harshitha
+# MSU FAQ Chatbot crawl config (SOC + Academics Programs + Registrar + Policies + Student Services + OGE)
+# Date: 11 Nov 2025
 
 site:
-  base: "https://www.montclair.edu"                     # global - used for sanity
-  soc: "https://www.montclair.edu/school-of-computing"  # SoC
+  base: 'https://www.montclair.edu'
+  soc:  'https://www.montclair.edu/school-of-computing'
 
-
-# Sitemap indexes to seed discovery
+# ---- Seed sitemap indexes ----
 sitemaps:
-  - "https://www.montclair.edu/wp-sitemap.xml"                         # global
-  - "https://www.montclair.edu/school-of-computing/wp-sitemap.xml"     # soc
-  - "https://www.montclair.edu/policies/wp-sitemap.xml"                # policy documents
-  - "https://www.montclair.edu/red-hawk-central/wp-sitemap.xml"        # registrar + services
-  - "https://www.montclair.edu/student-services/wp-sitemap.xml"        # student resources
-  - "https://www.montclair.edu/global/wp-sitemap.xml"                  # OGE
-  - "https://www.montclair.edu/graduate/wp-sitemap.xml"                # grad programs
-  - "https://www.montclair.edu/combined-programs/wp-sitemap.xml"       # combined programs
-  - "https://www.montclair.edu/information-technology/wp-sitemap.xml"  # IT policies
-  - "https://www.montclair.edu/student-center/wp-sitemap.xml"          # student center
-  - "http://catalog.montclair.edu/sitemap.xml"                         # catalogs
+  - 'https://www.montclair.edu/wp-sitemap.xml'
+  - 'https://www.montclair.edu/school-of-computing/wp-sitemap.xml'
+  - 'https://www.montclair.edu/policies/wp-sitemap.xml'
+  - 'https://www.montclair.edu/red-hawk-central/wp-sitemap.xml'
+  - 'https://www.montclair.edu/student-services/wp-sitemap.xml'
+  - 'https://www.montclair.edu/global/wp-sitemap.xml'
+  - 'https://www.montclair.edu/graduate/wp-sitemap.xml'
+  - 'https://www.montclair.edu/information-technology/wp-sitemap.xml'
+  - 'https://www.montclair.edu/academics/wp-sitemap.xml'
+  - 'http://catalog.montclair.edu/sitemap.xml'
 
-# CHANGE (Adaptability Enhancement):
-# Auto-discovery is enabled so new, whitelisted domains can be added by finding their sitemaps
-# and recording them in state/last_run.json (used on future runs).
-# Cross-Site discovery controls 
+# ---- Discovery ----
 discovery:
-  autositemap: true                # try <domain>/sitemap(.xml) for new domains
-  recheck_interval_days: 7         # how often to rediscover sitemaps
-  last_run_db: "state/last_run.json"
+  autositemap: true
+  recheck_interval_days: 0         # set 0 for a clean re-fetch while testing anchors
+  last_run_db: 'state/last_run.json'
 
   domain_whitelist:
-    - "montclair.edu"
-    - "www.montclair.edu"
-    - "catalog.montclair.edu"
+    - 'montclair.edu'
+    - 'www.montclair.edu'
+    - 'catalog.montclair.edu'
 
-  # pages we’ll scan for deep links (no need to fetch whole site)
   seed_pages:
-    - "https://www.montclair.edu/school-of-computing/graduate/"
-    - "https://www.montclair.edu/school-of-computing/undergraduate/"
-    - "http://catalog.montclair.edu/programs/"
-    - "http://catalog.montclair.edu/courses/"
+    - 'https://www.montclair.edu/school-of-computing/graduate/'
+    - 'https://www.montclair.edu/school-of-computing/undergraduate-students/'
+    - 'https://www.montclair.edu/academics/programs/'
+    - 'https://www.montclair.edu/academics/academic-calendar/'
+    - 'http://catalog.montclair.edu/coursesaz/csit/'
+    - 'http://catalog.montclair.edu/coursesaz/csam/'
+    - 'http://catalog.montclair.edu/coursesaz/cmp-bc/'
+    - 'http://catalog.montclair.edu/general-information/'
+    - 'https://www.montclair.edu/policies/category/academic/'
+    - 'https://www.montclair.edu/student-services/guide/'
+    - 'https://www.montclair.edu/global/how-to-apply/graduate-students/'
 
-  # regex on URL PATH (no scheme/host/query)
+  # Path rules (match on URL PATH only; fragments are not part of PATH)
   path_allowlist:
-    - "^/graduate/programs-of-study/(computer-science|computational-linguistics|cybersecurity|data-science|information-technology)[^/]*/*$"
-    - "^/programs/(computer-science|information-technology|data-science)[^/]*(/|$)"
-    - "^/courses/(cs|csit)[a-z0-9-]*/?$"
-    # Optional if you also remove '^/csam/' from exclude_patterns
-    # - "^/csam/student-success-center/career-services/cooperative-education-and-internships/?$"
+    # SOC hubs
+    - '^/school-of-computing/($|[^?]+)'
+
+    # Academics Programs: only programs we care about
+    - '^/academics/programs/(bs-computer-science|bs-information-technology|bs-data-science|ms-information-technology|ms-cybersecurity|ms-computer-science|game-programming-certificate)/?$'
+    - '^/academics/academic-calendar/[^?]*$'
+
+    # Registrar + Student Services core
+    - '^/red-hawk-central/registrar/($|[^?]+)'
+    - '^/student-services/($|guide/[^?]*$)'
+    - '^/chss/student-services/student-resources/[^?]*$'
+
+    # Policies (including category pages we need)
+    - '^/policies/($|all-policies/[^/]+/?$|category/academic/[^?]*$)'
+
+    # OGE (Global) incl. grad students
+    - '^/global/($|how-to-apply/[^?]*$|how-to-apply-for-a-form-i-20/?$|accepted-students/[^?]*$|current-students/[^?]*$|current-students/(f-1-students|j-1-students)/[^?]*$|12-month-opt-reporting-requirements/[^?]*$|opt-reporting/[^?]*$|leave-of-absence/[^?]*$|h-1b-cap-gap-extension/[^?]*$|graduate-students/[^?]*$)'
+
+    # Catalog: courses + programs + general information
+    - '^/coursesaz/(csit|csam|cmp-bc)/($|[^?]+)$'
+
+    # *** FIX: allow base program pages with or without trailing slash; no extra char required ***
+    - '^/programs/(computer-science-(bs|ms)|information-technology-bs|data-sciences-bs|data-science-ms|cybersecurity-ms|game-development-certificate)/?$'
+
+    - '^/general-information/($|grading-standards/[^?]*$)'
 
   path_blocklist:
-    - "/search"
-    - "\\?(utm_|fbclid=)"
+    - '/search'
+    - '\\?(utm_|fbclid=|gclid=)'
+    - '^/global/(news-and-announcements|events)/'
+    - '^/school-of-computing/(author|category|tag)/'
+    - '/page/\\d+/?$'
+    - '/feed/$'
+    - '/wp-json/'
 
   include_profilepages: false
 
-# CHANGE (Incremental Update Logic):
-# Centralized UA, rate-limit, and timeout used during fetching; works with conditional requests (ETag/Last-Modified).
-# centralizes rate limit, timeout, user agent
+# ---- Crawl defaults ----
 crawl:
   rate_limit_seconds: 0.3
   timeout_seconds: 40
-  user_agent: "MSU-FAQ-Bot/0.1 (contact: ramakrishnah1@montclair.edu)"
+  user_agent: 'MSU-FAQ-Bot/0.1 (contact: ramakrishnah1@montclair.edu)'
 
-# Buckets (regex runs against URL PATH (not full URL), e.g., "/policies/academic-integrity/")
+# ---- Buckets ----
 buckets:
   - name: soc
     include:
-      - "^/school-of-computing/($|[^?]+)"
+      - '^/school-of-computing/($|[^?]+)'
     exclude:
-      - "^/school-of-computing/(19|20)\\d{2}/"                         # drop year archives
-      - "^/school-of-computing/(author|category|tag)/"                 # drop taxanomies
-      - "/page/\\d+/?$"                                                # drop pagination
-      - "/amp/?$"                                                      # drop AMP
+      - '^/school-of-computing/(19|20)\\d{2}/'
+      - '/(author|category|tag)/'
+      - '/page/\\d+/?$'
+      - '/amp/?$'
+
+  - name: academics-programs
+    include:
+      - '^/academics/programs/(bs-computer-science|bs-information-technology|bs-data-science|ms-information-technology|ms-cybersecurity|ms-computer-science|game-programming-certificate)/?$'
+      - '^/academics/academic-calendar/[^?]*$'
 
   - name: registrar
     include:
-      - "^/red-hawk-central/registrar/($|[^?]+)"
+      - '^/red-hawk-central/registrar/($|[^?]+)'
 
   - name: policies
-    # keep individual policy pages; drop some hubs, skip big hubs except detail pages under /all-policies/
     include:
-      - "^/policies/(?!category/|responsible-office/|all-policies/?$)[^?]+$"
-      - "^/policies/all-policies/[^/][^?]+$"     # allow detail pages under /all-policies/
+      - '^/policies/all-policies/[^/][^?]+/?$'
+      - '^/policies/category/academic/[^?]*$'
+      - '^/policies/(?!category/|responsible-office/|all-policies/?$)[^?]+$'
 
   - name: student-services
     include:
-      - "^/student-services/($|[^?]+)"
-    exclude:
-      - "^/student-services/(19|20)\\d{2}/"      # drop dated news posts
-      - "/page/\\d+/?$"
+      - '^/student-services/guide/[^?]*$'
+      - '^/chss/student-services/student-resources/[^?]*$'
 
   - name: oge
     include:
-      - "^/global/($|[^?]+)"
-    exclude:
-      - "^/global/(19|20)\\d{2}/"                # drop dated news posts
-      - "/page/\\d+/?$"
- 
-  # Graduate program details
-  - name: grad-programs
+      - '^/global/($|how-to-apply/[^?]*$|how-to-apply-for-a-form-i-20/?$|accepted-students/[^?]*$|current-students/[^?]*$|current-students/(f-1-students|j-1-students)/[^?]*$|12-month-opt-reporting-requirements/[^?]*$|opt-reporting/[^?]*$|leave-of-absence/[^?]*$|h-1b-cap-gap-extension/[^?]*$|graduate-students/[^?]*$)'
+
+  - name: catalog-courses
     include:
-      - "^/graduate/programs-of-study/(computer-science-ms|computer-science-combined-bsms|computational-linguistics-ms|cybersecurity-ms|data-science-ms|information-technology-ms|computing-technology-certificate)/?$"
-      - "^/graduate/programs-of-study/(computer-science-ms|computer-science-combined-bsms|computational-linguistics-ms|cybersecurity-ms|data-science-ms|information-technology-ms|computing-technology-certificate|applied-mathematics-ms)/?$"
+      - '^/coursesaz/(csit|csam|cmp-bc)/($|[^?]+)$'
 
-
-  # Combined programs (CS/IT/Data only)
-  - name: combined-programs
+  - name: catalog-programs
     include:
-      - "^/combined-programs/(programs-of-study/)?(computer-science-.*|information-technology-.*|data-science-.*)/?$"
-      - "^/combined-programs/computer-science-combined-bs-ms/?$"   # the specific slug in your list
+      # *** FIX: allow base pages cleanly (with or without trailing slash) ***
+      - '^/programs/(computer-science-(bs|ms)|information-technology-bs|data-sciences-bs|data-science-ms|cybersecurity-ms|game-development-certificate)/?$'
+      - '^/general-information/($|grading-standards/[^?]*$)'
 
-  # Red Hawk services (non-registrar)
-  - name: red-hawk-services
-    include:
-      - "^/red-hawk-central/contact/?$"
-      - "^/red-hawk-central/services/academic-advising/?$"
-      - "^/red-hawk-central/waitlist-for-students/?$"
-      - "^/red-hawk-central/financial-aid/.+?$"          # allow deep paths like .../sap-regulations/...
-
-  # IT policies / service desk
   - name: it-policies
     include:
-      - "^/information-technology/it-policies-and-procedures/[^/][^?]+/?$"
-      - "^/information-technology/it-service-desk/?$"
+      - '^/information-technology/it-policies-and-procedures/[^/][^?]+/?$'
+      - '^/information-technology/it-service-desk/?$'
 
-  # Student Center
-  - name: student-center
-    include:
-      - "^/student-center/(reservable-rooms|scheduling)/?$"
-
-  # Policy PDFs
   - name: policies-pdf
     include:
-      - "^/policies/wp-content/uploads/.*\\.pdf$"
+      - '^/policies/wp-content/uploads/.*\\.pdf$'
 
-  # University policy PDFs (older path)
-  - name: university-policies-pdf
-    include:
-      - "^/university-policies/wp-content/uploads/.*\\.pdf$"
-
-    # Red Hawk Central → Student Accounts (costs, deadlines, payment options)
-  - name: rhc-student-accounts
-    include:
-      - "^/red-hawk-central/student-accounts/[^?]+$"
-
-  # Graduate admissions "How to Apply" (and its subpages)
-  - name: grad-how-to-apply
-    include:
-      - "^/graduate/how-to-apply(/[^?]+)?/?$"   # matches /graduate/how-to-apply and deeper pages
-
-  # Site-wide uploads PDFs (covers HIPAA, fact sheets, etc. not under /policies/)
   - name: uploads-pdf
     include:
-      - "^/wp-content/uploads/.*\\.pdf$"
-  
-  # discover catalogs
-  - name: catalog
-    include:
-      - "^/programs/(computer-science|information-technology|data-science|applied-math[^/]*|applied-mathematics[^/]*|game-development[^/]*)/?$"
-      - "^/courses/(cs|csit)[a-z0-9-]*/?$"
-  
-  # online programs
-  - name: online-programs
-    include:
-      - "^/online/graduate-degrees/information-technology-ms-psm/?$"
-  
+      - '^/wp-content/uploads/.*\\.pdf$'
 
-# Further narrow down the 'policies' bucket to topics under current scope.
-# URL allow-list for policies (lets in likely matches incl. synonyms)
+# ---- Focused policy allowlist (unchanged core topics) ----
 policy_focus_allowlist:
-  # direct slugs (keep)
-  - "^/policies/all-policies/class-absence-documentation(/|$)"
-  - "^/policies/all-policies/academic-integrity(/|$)"
-  - "^/policies/all-policies/grading(/|$)"
-  - "^/policies/all-policies/withdrawal(/|$)"
-  - "^/policies/all-policies/leave-of-absence(/|$)"
-  # under /policies/all-policies/ (new)
-  - "^/policies/all-policies/academic-integrity(/|$)"
-  - "^/policies/all-policies/grading(/|$)"
-  - "^/policies/all-policies/withdrawal(/|$)"
-  - "^/policies/all-policies/leave-of-absence(/|$)"
-  # loose variants (optional, also add all-policies versions)
-  - "^/policies/(all-policies/)?[^/]*integrity[^/]*/?$"
-  - "^/policies/(all-policies/)?[^/]*misconduct[^/]*/?$"
-  - "^/policies/(all-policies/)?[^/]*grading[^/]*/?$"
-  - "^/policies/(all-policies/)?[^/]*withdraw[^/]*/?$"
-  - "^/policies/(all-policies/)?[^/]*leave[^/]*/?$"
-  - "^/policies/(all-policies/)?[^/]*loa[^/]*/?$"
+  - '^/policies/all-policies/class-absence-documentation(/|$)'
+  - '^/policies/all-policies/academic-integrity(/|$)'
+  - '^/policies/all-policies/grading(/|$)'
+  - '^/policies/all-policies/withdrawal(/|$)'
+  - '^/policies/all-policies/leave-of-absence(/|$)'
+  - '^/policies/(all-policies/)?[^/]*integrity[^/]*/?$'
+  - '^/policies/(all-policies/)?[^/]*misconduct[^/]*/?$'
+  - '^/policies/(all-policies/)?[^/]*grading[^/]*/?$'
+  - '^/policies/(all-policies/)?[^/]*withdraw[^/]*/?$'
+  - '^/policies/(all-policies/)?[^/]*leave[^/]*/?$'
+  - '^/policies/(all-policies/)?[^/]*loa[^/]*/?$'
 
-
-# Topic lexicon for content check (post-filter)
-# Lexicon used by policy_postfilter.py to keep only on-topic policy files.
+# ---- Topic lexicon (unchanged) ----
 policy_topic_lexicon:
-  academic-integrity:
-    any:
-      - "academic integrity"
-      - "plagiarism"
-      - "cheating"
-      - "misconduct"
-      - "honor code"
-    must_one_of: []
-  grading:
-    any:
-      - "grading"
-      - "grades"
-      - "grade policy"
-      - "pass/fail"
-      - "incomplete"
-    must_one_of: []
-  withdrawal:
-    any:
-      - "withdraw"
-      - "withdrawal"
-      - "course withdrawal"
-      - "drop"
-      - "unenroll"
-    must_one_of: []
-  leave-of-absence:
-    any:
-      - "leave of absence"
-      - "loa"
-      - "medical leave"
-      - "personal leave"
-      - "leave request"
-    must_one_of: []
-  # NEW
-  class-absence:
-    any:
-      - "class absence"
-      - "absence documentation"
-      - "doctor's note"
-      - "excused absence"
-      - "attendance"
-      - "missed class"
-    must_one_of: []
+  academic-integrity: { any: ['academic integrity','plagiarism','cheating','misconduct','honor code'], must_one_of: [] }
+  grading:            { any: ['grading','grades','grade policy','pass/fail','incomplete'], must_one_of: [] }
+  withdrawal:         { any: ['withdraw','withdrawal','course withdrawal','drop','unenroll'], must_one_of: [] }
+  leave-of-absence:   { any: ['leave of absence','loa','medical leave','personal leave','leave request'], must_one_of: [] }
+  class-absence:      { any: ['class absence','absence documentation','doctor''s note','excused absence','attendance','missed class'], must_one_of: [] }
 
-
-
-# Global skip rules (apply to ALL paths before bucketing)
-# Use these to drop content you never want anywhere.
+# ---- Global excludes (do NOT exclude /category globally) ----
 exclude_patterns:
-  - "\\?(utm_|fbclid=)"                 # tracking query strings
-  - "\\.(jpg|jpeg|png|gif|svg|webp)$"   # image files
-  - "^//"                               # protocol-relative externals (//example.com)
-  - "^/~"                               # personal homepages (/~username)
-  - "/profilepages/"                    # legacy profile pages
-  - "/author/|/category/|/tag/"         # taxonomy archives
-  - "/\\d{4}/\\d{2}/"                   # date-based posts (/2025/09/)
-  - "/events/\\d{4}/\\d{2}/"            # event archives
-  - "/page/\\d+/?$"                     # pagination (/page/2/)
-  - "/feed/$"                           # RSS endpoints
-  - "/wp-json/"                         # REST root
-  - "^/csam/"                           # College of Science & Math pages
-  - "^/human-resources/"                # Human Resource pages
-  - "^/pseg-sustainability-institute"   # out of scope
-  - "^/newscenter/"                     # news articles (not FAQ content)
+  - '\\?(utm_|fbclid=|gclid=)'
+  - '\\.(jpg|jpeg|png|gif|svg|webp)$'
+  - '^//'
+  - '^/~'
+  - '/profilepages/'
+  - '/author/|/tag/'
+  - '/\\d{4}/\\d{2}/'
+  - '/events/\\d{4}/\\d{2}/'
+  - '/page/\\d+/?$'
+  - '/feed/$'
+  - '/wp-json/'
+  - '^/human-resources/'
+  - '^/pseg-sustainability-institute'
+  - '^/newscenter/'
 
-
-# filter out url's based on current scope
+# ---- Prefix pre-filter ----
 include_prefixes:
-  - "/school-of-computing/"           # school of computing 
-  - "/red-hawk-central/registrar/"    # registrar, add or drop, contact hours
-  - "/global/"                        # office of global engagement
-  - "/policies/"                      # policies & procedures
-  - "/student-services/"              # important dates , details and deadlines
+  - '/school-of-computing/'
+  - '/academics/programs/'
+  - '/academics/academic-calendar/'
+  - '/red-hawk-central/registrar/'
+  - '/global/'
+  - '/policies/'
+  - '/student-services/'
+  - '/chss/student-services/'
+  - '/coursesaz/'
+  - '/programs/'
+  - '/general-information/'
 
-
-# Add manually if any pages or pdf does not appear in sitemap
+# ---- Manual must-have pages (safety net) ----
 manual:
-  - "https://www.montclair.edu/university-policies/wp-content/uploads/sites/205/2018/08/Account-Management-Policy-1.0.pdf"
-  - "https://www.montclair.edu/policies/wp-content/uploads/sites/205/2019/03/Procurement_Policies.pdf"
+  # Academics programs (UG + Grad + cert)
+  - 'https://www.montclair.edu/academics/programs/bs-computer-science/'
+  - 'https://www.montclair.edu/academics/programs/bs-information-technology/'
+  - 'https://www.montclair.edu/academics/programs/bs-data-science/'
+  - 'https://www.montclair.edu/academics/programs/ms-information-technology/'
+  - 'https://www.montclair.edu/academics/programs/ms-cybersecurity/'
+  - 'https://www.montclair.edu/academics/programs/ms-computer-science/'
+  - 'https://www.montclair.edu/academics/programs/game-programming-certificate/'
 
+  # Catalog programs + anchors (base URL is enough—sectionizer will create fragments)
+  - 'http://catalog.montclair.edu/programs/computer-science-bs/'
+  - 'http://catalog.montclair.edu/programs/data-sciences-bs/'
+  - 'http://catalog.montclair.edu/programs/information-technology-bs/'
+  - 'http://catalog.montclair.edu/programs/computer-science-ms/'
+  - 'http://catalog.montclair.edu/programs/data-science-ms/'
+  - 'http://catalog.montclair.edu/programs/cybersecurity-ms/'
+  - 'http://catalog.montclair.edu/programs/game-development-certificate/'
+  - 'http://catalog.montclair.edu/general-information/'
+  - 'http://catalog.montclair.edu/general-information/grading-standards/'
 
-# File output locations
+  # Registrar + Academic calendar
+  - 'https://www.montclair.edu/academics/academic-calendar/'
+  - 'https://www.montclair.edu/red-hawk-central/registrar/'
+
+  # Policies (category + core policies)
+  - 'https://www.montclair.edu/policies/category/academic/'
+  - 'https://www.montclair.edu/policies/all-policies/academic-integrity/'
+  - 'https://www.montclair.edu/policies/all-policies/grading/'
+  - 'https://www.montclair.edu/policies/all-policies/withdrawal/'
+  - 'https://www.montclair.edu/policies/all-policies/leave-of-absence/'
+
+  # Student resources
+  - 'https://www.montclair.edu/student-services/guide/'
+  - 'https://www.montclair.edu/chss/student-services/student-resources/'
+
+  # OGE
+  - 'https://www.montclair.edu/global/how-to-apply/graduate-students/'
+  - 'https://www.montclair.edu/global/12-month-opt-reporting-requirements/'
+  - 'https://www.montclair.edu/global/opt-reporting/'
+  - 'https://www.montclair.edu/global/leave-of-absence/'
+  - 'https://www.montclair.edu/global/h-1b-cap-gap-extension/'
+
+  # SOC hubs
+  - 'https://www.montclair.edu/school-of-computing/graduate/'
+  - 'https://www.montclair.edu/school-of-computing/undergraduate-students/'
+
+# ---- Rendering / table extraction ----
+render_js_prefixes:
+  - 'https://www.montclair.edu/red-hawk-central/registrar/'
+
+table_extract_prefixes:
+  - 'https://www.montclair.edu/red-hawk-central/registrar/'
+  - 'https://www.montclair.edu/policies/all-policies/'
+  - 'https://www.montclair.edu/policies/category/academic/'
+  - 'https://www.montclair.edu/student-services/'
+  - 'https://www.montclair.edu/global/'
+  - 'https://www.montclair.edu/graduate/how-to-apply/'
+  - 'https://www.montclair.edu/academics/academic-calendar/'
+  - 'http://catalog.montclair.edu/programs/'
+  - 'http://catalog.montclair.edu/general-information/'
+
+table_extract_patterns:
+  - '^https://www\\.montclair\\.edu/red-hawk-central/registrar/.*$'
+  - '^https://www\\.montclair\\.edu/policies/all-policies/[^/]+/?$'
+  - '^https://www\\.montclair\\.edu/policies/category/academic/.*$'
+  - '^https://www\\.montclair\\.edu/student-services/.*$'
+  - '^https://www\\.montclair\\.edu/global/.*$'
+  - '^https://www\\.montclair\\.edu/graduate/how-to-apply/.*$'
+  - '^https://www\\.montclair\\.edu/academics/academic-calendar/.*$'
+  - '^http://catalog\\.montclair\\.edu/programs/.*$'
+  - '^http://catalog\\.montclair\\.edu/general-information/.*$'
+
+term_patterns:
+  - '(Fall|Spring|Summer|Winter)\\s+20\\d{2}'
+session_patterns:
+  - '(Session\\s+[ABC])'
+deadline_header_patterns:
+  - 'last day to add'
+  - 'last day to add/drop'
+  - 'last day to withdraw'
+  - 'final day to withdraw'
+  - 'withdrawal period begins'
+  - 'waitlist ends'
+
+# ---- Retrieval weighting ----
+query_intents:
+  deadline: ['last day to withdraw','withdrawal deadline','final day to withdraw','wd deadline','academic calendar']
+  policy:   ['pass/fail','what happens when i withdraw','considered a withdrawal','policy','leave of absence','withdrawal policy','academic integrity','grading standards']
+  contact:  ['contact','who do i email','phone','how do i request','advising','tutoring','counseling']
+
+bucket_weights:
+  default: { registrar: 1.00, policies: 0.98, student-services: 0.95, soc: 0.95, oge: 0.97, catalog-courses: 0.96, catalog-programs: 0.98, academics-programs: 0.99 }
+  deadline: { registrar: 1.10, policies: 0.95, student-services: 0.90, catalog-programs: 0.92 }
+  policy:   { policies: 1.12, registrar: 0.98, catalog-programs: 0.95 }
+  contact:  { student-services: 1.08, registrar: 1.02, policies: 0.96 }
+
+rank_weights: { embed: 0.55, bm25: 0.25, bucket: 0.10, feats: 0.10 }
+diversity: { max_per_url: 2 }
+
+bm25_guardrail:
+  deadline_keywords: ['last day','final day','deadline','withdraw','calendar']
+  max_gate_loss: 0.15
+
+# Only index these buckets for now
+allowed_buckets:
+  - soc
+  - academics-programs
+  - registrar
+  - policies
+  - student-services
+  - oge
+  - catalog-courses
+  - catalog-programs
+
+# ---- Output paths ----
 paths:
-  raw_dir: "data/raw"
-  processed_dir: "data/processed"
-  url_list_csv: "data/url_list.csv"
+  raw_dir: 'data/raw'
+  processed_dir: 'data/processed'
+  url_list_csv: 'data/url_list.csv'

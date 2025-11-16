@@ -78,7 +78,7 @@ def process_stub(stub_path: Path, processed_dir: str, raw_dir: str) -> bool:
     with open(out_md, "w", encoding="utf-8") as f:
         f.write(frontmatter.dumps(post))
 
-    logging.info("✅ Wrote: %s", out_md)
+    logging.info("Wrote: %s", out_md)
     return True
 
 def main():

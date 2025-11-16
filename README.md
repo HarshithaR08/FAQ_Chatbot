@@ -57,38 +57,50 @@
 ```text
 
 faq_chatbot/
-├── ingest/
-│   ├── fetch_from_sitemap.py        # Crawl + filter sitemap URLs
-│   ├── discovery_links.py           # Discover deep links and adapt to new sites
-│   ├── pdf_to_markdown.py           # Convert policy PDFs to text
-│   ├── run_all.py                   # End-to-end ingestion & conversion pipeline
-│
 ├── data/
-│   ├── raw/                         # Raw HTML/PDF data
-│   ├── processed/                   # Cleaned Markdown files
-│   ├── url_list.csv                 # Master list of discovered URLs
+│   ├── raw/                                         # Raw HTML/PDF fetched from sites (ignored in git)
+│   ├── processed/                                   # Cleaned Markdown (ignored in git)
+│   └── url_list.csv                                 # Master list of discovered URLs (ignored in git)
 │
-├── eval/
-│   ├── policy_postfilter.py         # Keep only relevant policy topics
-│   ├── preview_chunks.py            # Preview sample chunks
-│
-├── rag/
-│   ├── chunker.py                   # Split Markdown into smaller sections
-│   ├── chunks.jsonl                 # Chunked text ready for embeddings
-│
-├── vectorstore/
-│   ├── build_index_retrieval.py     # Create Chroma vector index
-│   ├── test_retrieval_query.py      # Query test for semantic retrieval
+├── ingest/
+│   ├── fetch_from_sitemap.py                        # Crawl + filter sitemap URLs
+│   ├── discovery_links.py                           # Discover deep links and adapt to new sites
+│   ├── pdf_to_markdown.py                           # Convert policy PDFs to text
+│   ├── html_to_markdown.py                          # HTML → Markdown
+│   ├── extract_tables.py                            # Extract tables into structured JSON/Markdown
+│   ├── render_fetch.py                              # Rendered fetch (for JS-heavy pages, future)
+│   ├── run_all.py                                   # End-to-end ingestion & conversion pipeline
+│   └── __init__.py
 │
 ├── kb/
-│   ├── build_kb.py                  # Generate Q/A pairs for FAQs
+│   ├── build_kb.py                                  # Generate Q/A pairs for FAQs
+│   ├── faq.csv                                      # Seed FAQ questions (curated)
+│   ├── faq.jsonl                                    # JSONL version of FAQ data
+│   ├── seed_questions.yaml                          # Starter questions for evaluation
+│   └── __init__.py
 │
-├── config/
-│   └── sources.yaml                 # Discovery, filtering, and path configuration
+├── rag/
+│   ├── chunker.py                                   # Split Markdown into smaller sections
+│   ├── chunks.jsonl                                 # Chunked text ready for embeddings (ignored in git for new files)
+│   └── __init__.py
 │
-├── README.md                        # Project overview and usage
-├── SECURITY.md                      # Security & commit guidelines
-└── requirements.txt                 # Required dependencies
+├── vectorstore/
+│   ├── build_index_retrieval.py                      # Build Chroma index + retrieval pipeline
+│   ├── rerank.py                                     # Intent detection + reranking logic
+│   ├── test_retrieval_query.py                       # Manual test harness for retrieval
+│   ├── tests/
+│   │   └── regression_testing_retrieval.py           # Automated regression tests
+│   └── __init__.py
+│
+├── eval/
+│   ├── policy_postfilter.py                          # Keep only relevant policy topics
+│   ├── preview_chunks.py                             # Preview sample chunks for sanity checks
+│   └── __init__.py
+│
+├── sources.yaml                                      # URL/bucket configuration for ingestion
+├── SECURITY.md                                       # Security & commit guidelines
+├── README.md                                         # Project overview and usage
+└── requirements.txt                                  # Required dependencies
 ```
 
 ---
@@ -112,19 +124,22 @@ cd faq_chatbot
 
 # 2. Activate virtual environment
 python -m venv .venv
-source .venv/bin/activate   # Mac/Linux
-.venv\Scripts\activate      # Windows
+source .venv/bin/activate                               # Mac/Linux
+.venv\Scripts\activate                                  # Windows
 
 # 3. Install dependencies
 pip install -r requirements.txt
 
 # 4. Run the pipeline
-python ingest/run_all.py           # Crawl & convert documents
-python ingest/pdf_to_markdown.py   # Extract text from PDFs
-python eval/policy_postfilter.py   # Filter relevant policies
-python rag/chunker.py              # Split into chunks
-python vectorstore/build_index.py  # Build Chroma vector DB
-python vectorstore/query_demo.py   # Test retrieval
+python -m ingest.run_all                                # Crawl + HTML → Markdown
+python -m ingest.pdf_to_markdown                        # Extract PDFs → Markdown (if any)
+python -m eval.policy_postfilter                        # Filter / focus on relevant policies
+python -m rag.chunker                                   # Split Markdown into chunks
+python -m eval.preview_chunks                           # Optional: sanity-check chunks
+python -m kb.build_kb                                   # Optional: generate FAQ-style Q/A
+python -m vectorstore.build_index_retrieval
+python -m vectorstore.test_retrieval_query
+python -m vectorstore.tests.regression_testing_retrieval
 
 ```
 
@@ -132,9 +147,9 @@ python vectorstore/query_demo.py   # Test retrieval
 
 ## 🧠 Configuration
 
-- **Main configuration lives in config/sources.yaml:**
+- **Main configuration lives in sources.yaml:**
   - Add new sitemap URLs or manual pages here.
-  - Edit regex rules under buckets to control which URLs are included/excluded.
+  - Edit regex rules under `buckets` to control which URLs are included/excluded.
   - The system automatically adapts to new external sites using discovery + auto-sitemap detection.
 
 ---
@@ -161,7 +176,7 @@ pip install -r requirements.txt
   - data/raw → stores raw HTML/PDFs
   - data/processed → cleaned Markdown
   - rag/chunks.jsonl → chunked knowledge base
-  - ectorstore/chroma/ → persistent ChromaDB index
+  - vectorstore/chroma/ → persistent ChromaDB index
 
 ---
 

@@ -14,6 +14,24 @@ import yaml
 import xml.etree.ElementTree as ET
 from typing import List, Tuple, Iterable
 from urllib.parse import urlparse
+from urllib.parse import urlsplit, urlunsplit
+
+def _normalize_url(url: str) -> str | None:
+    if not url:
+        return None
+    s = urlsplit(url.strip())
+    host = (s.netloc or "").lower()
+    if host.endswith("catalog.montclair.edu"):
+        scheme = "http"
+    elif host.endswith("montclair.edu"):
+        scheme = "https"
+    else:
+        return None  # off-domain
+    path = s.path
+    if path and not path.endswith("/") and "." not in path.rsplit("/", 1)[-1]:
+        path = path + "/"
+    return urlunsplit((scheme, host, path, "", ""))
+
 
 # header string to send when making an HTTP request for web servers to identify bot.
 USER_AGENT = "MSU-FAQ-Bot/0.1 (contact: ramakrishnah1@montclair.edu)"
@@ -47,31 +65,34 @@ def get_http(url: str, timeout=20) -> str | None:
 # extract child sitemap URLs from the index file
 # Input: <sitemapindex> XML string
 # Output: list of child sitemap URLs
-def parse_index_for_sitemaps(xml_text: str) -> List[str]:
+def parse_index_for_sitemaps(xml_text: str) -> list[str]:
     ns = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
     root = ET.fromstring(xml_text)
-    out: List[str] = []
-    for sm in root.findall("sm:sitemap", ns): #find all child sitemaps <sitemap> tags in tree root 
-        loc = sm.findtext("sm:loc", default="", namespaces=ns).strip() #inside this block look for url's (loc) and fetch the text or url
+    out: list[str] = []
+    for sm in root.findall("sm:sitemap", ns):
+        loc = sm.findtext("sm:loc", default="", namespaces=ns).strip()
         if loc:
-            out.append(loc)
+            nu = _normalize_url(loc)
+            if nu:
+                out.append(nu)  # <-- URL only (no lastmod here!)
     logging.info(f"Child sitemaps found: {len(out)}")
-    return out 
-
+    return out
 
 # extract sitemap pages/posts to fetch list of (loc, lastmod) from a sitemap **page** (not index).
 # extract <loc>, <lastmod> entries from sitemap page
 # Input: <urlset> XML string
 # Output: list of (loc, lastmod)
-def parse_sitemap_for_urls(xml_text: str) -> List[Tuple[str, str]]:
+def parse_sitemap_for_urls(xml_text: str) -> list[tuple[str, str]]:
     ns = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
     root = ET.fromstring(xml_text)
-    out: List[Tuple[str, str]] = []
+    out: list[tuple[str, str]] = []
     for url in root.findall("sm:url", ns):
         loc = url.findtext("sm:loc", default="", namespaces=ns).strip()
         lastmod = url.findtext("sm:lastmod", default="", namespaces=ns).strip()
         if loc:
-            out.append((loc, lastmod))
+            nu = _normalize_url(loc)
+            if nu:
+                out.append((nu, lastmod))
     logging.info(f"URLs in this sitemap: {len(out)}")
     return out
 

@@ -2,16 +2,36 @@
 # Purpose: Harvest deep links from a few seed pages and return (url, lastmod, bucket)
 
 from __future__ import annotations
-from fetch_from_sitemap import compile_rules, first_matching_bucket, globally_excluded
+from .fetch_from_sitemap import compile_rules, first_matching_bucket, globally_excluded
 import logging, re, yaml, requests
 from urllib.parse import urljoin, urlparse, urlunparse
 from typing import List, Tuple
 from bs4 import BeautifulSoup
+from urllib.parse import urlsplit, urlunsplit
+
 
 USER_AGENT = "MSU-FAQ-Bot/0.1 (contact: ramakrishnah1@montclair.edu)"
 # CHANGE (Adaptability Enhancement):
 # Try common sitemap endpoints on new hosts (e.g., catalog.montclair.edu) so we can auto-enroll them.
 AUTO_SITEMAP_CANDIDATES = ["sitemap.xml", "sitemap_index.xml", "wp-sitemap.xml"]
+
+
+def normalize_url(url: str) -> str | None:
+    if not url:
+        return None
+    s = urlsplit(url.strip())
+    host = s.netloc.lower()
+    if host.endswith("catalog.montclair.edu"):
+        scheme = "http"
+    elif host.endswith("montclair.edu"):
+        scheme = "https"
+    else:
+        return None  # off-domain
+    # ensure trailing slash on path unless a file name is present
+    path = s.path
+    if path and not path.endswith("/") and "." not in path.rsplit("/", 1)[-1]:
+        path = path + "/"
+    return urlunsplit((scheme, host, path, "", ""))
 
 
 def setup_logger():
@@ -71,7 +91,7 @@ def harvest_from_seed(seed_url: str, cfg) -> list[str]:
     links = set()
     for a in soup.find_all("a", href=True):
         abs_url = urljoin(seed_url, a["href"].strip())
-        abs_url = _norm_url(abs_url)
+        abs_url = normalize_url(abs_url)
         if abs_url:
             links.add(abs_url)
 
@@ -105,7 +125,8 @@ def discover_links(cfg) -> List[Tuple[str, str, str]]:
 
     out: list[Tuple[str, str, str]] = []
     for seed in seeds:
-        urls = harvest_from_seed(seed, cfg)
+        seed_norm = normalize_url(seed) or seed
+        urls = harvest_from_seed(seed_norm, cfg)
         for u in urls:
             path = urlparse(u).path
 
