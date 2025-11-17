@@ -7,7 +7,14 @@ python-dotenv
 feedparser
 tqdm
 pdfminer.six
-faiss-cpu
 sentence-transformers
 chromadb
 PyYAML
+
+# LLM + RAG
+transformers>=4.40.0
+accelerate
+torch  # installed separately w/ CUDA
+
+# Testing
+pytest
