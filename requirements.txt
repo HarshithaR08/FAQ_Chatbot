@@ -1,20 +1,36 @@
+# Core deps
 requests
 beautifulsoup4
+pandas
+playwright
 lxml
 markdownify
 python-frontmatter
 python-dotenv
 feedparser
 tqdm
+PyYAML
+tabulate
+
+# PDF / HTML parsing
 pdfminer.six
+
+# Embeddings + vector search
 sentence-transformers
 chromadb
-PyYAML
+
+# For safety (even if we don’t use FAISS directly, chroma may need it)
+faiss-cpu
+
+# Optional utility libraries
+python-slugify
 
 # LLM + RAG
 transformers>=4.40.0
 accelerate
 torch  # installed separately w/ CUDA
+bitsandbytes
 
 # Testing
 pytest
+

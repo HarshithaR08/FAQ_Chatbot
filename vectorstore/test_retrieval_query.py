@@ -178,13 +178,22 @@ def ask(query: str, k: int = 5, bucket_filter: str | None = None):
 
 # manual tests
 if __name__ == "__main__":
-    ask("What is the course withdrawal deadline?", k=5)
-    ask("what is the Last Day to Withdraw Classes for Winter 2025",k=5)
-    ask("what is the Final Day to Withdraw course for summer 2026",k=5)
-    ask("what is the semester end date of Winter 2026", k=5)
-    ask("what are the Required Courses for MS in Computer Science",k=5)
-    #ask("How does pass/fail grading work?", k=5)
-    #ask("How do I request a leave of absence?", k=5)
-    #ask("How can I contact academic advising?", k=5)
-    #ask("What are the eligibility criteria for study abroad?", k=5)
-    #ask("Last day of Winter 2025 Semester",k=5)
+    #ask("1.What is the course withdrawal deadline?", k=5)
+    #ask("2.what is the Last Day to Withdraw Classes for Winter 2025",k=5)
+    #ask("3.what is the Final Day to Withdraw course for summer 2026",k=5)
+    #ask("4.what is the semester end date of Winter 2026", k=5)
+    #ask("5.what are the Required Courses for MS in Computer Science",k=5)
+    #ask("6.How does pass/fail grading work?", k=5)
+    #ask("7.How do I request a leave of absence?", k=5)
+    #ask("8.How can I contact academic advising?", k=5)
+    #ask("9.What are the eligibility criteria for study abroad?", k=5)
+    #ask("10.Last day of Winter 2025 Semester",k=5)
+    #ask("11.what is the minimum English test score needed for International students",k=5)
+    #ask("12.what is the last day of Session B for Fall 2025", k=5)
+    #ask("13.Do we get scholarship as a graduate student", k=5)
+
+    # topics that need fix
+    #ask("14.how much scholarship do we get as a graduate student",k=5) #need fix not getting the right chunk
+    #ask("15.can you please give me a brief information on Academic Integrity", k=5) # ans chunk is in top 2 not 1
+    #ask("how many graduate courses or programs are there under school of computing", k=5)
+    ask("what are the core research areas in soc", k=5)
