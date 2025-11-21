@@ -54,7 +54,12 @@ def main():
         else:
             outdir = processed / "_out_of_scope" / md.parent.relative_to(processed)
             outdir.mkdir(parents=True, exist_ok=True)
-            md.rename(outdir / md.name)
+            target = outdir / md.name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if target.exists():
+                 target.unlink()  # or: print("SKIP", target); continue
+            md.rename(target)
+            
             moved += 1
             logging.info(f"MOVE {md} topics=[]")
 

@@ -49,7 +49,7 @@ discovery:
     - '^/school-of-computing/($|[^?]+)'
 
     # Academics Programs: only programs we care about
-    - '^/academics/programs/(bs-computer-science|bs-information-technology|bs-data-science|ms-information-technology|ms-cybersecurity|ms-computer-science|game-programming-certificate)/?$'
+    - '^/academics/programs/(bs-computer-science|bs-information-technology|bs-data-science|ms-information-technology|ms-cybersecurity|ms-computer-science|game-programming-certificate|computing-technology-certificate-online)/?$'
     - '^/academics/academic-calendar/[^?]*$'
 
     # Registrar + Student Services core
@@ -70,6 +70,12 @@ discovery:
     - '^/programs/(computer-science-(bs|ms)|information-technology-bs|data-sciences-bs|data-science-ms|cybersecurity-ms|game-development-certificate)/?$'
 
     - '^/general-information/($|grading-standards/[^?]*$)'
+
+    # Catalog degree requirements + transfer guidelines
+    - '^/undergraduate-graduate-degree-requirements/($|[^?]*$)'
+
+    - '^/red-hawk-central/financial-aid/[^?]*$'
+
 
   path_blocklist:
     - '/search'
@@ -101,12 +107,14 @@ buckets:
 
   - name: academics-programs
     include:
-      - '^/academics/programs/(bs-computer-science|bs-information-technology|bs-data-science|ms-information-technology|ms-cybersecurity|ms-computer-science|game-programming-certificate)/?$'
+      - '^/academics/programs/(bs-computer-science|bs-information-technology|bs-data-science|ms-information-technology|ms-cybersecurity|ms-computer-science|game-programming-certificate|computing-technology-certificate-online)/?$'
       - '^/academics/academic-calendar/[^?]*$'
 
   - name: registrar
     include:
       - '^/red-hawk-central/registrar/($|[^?]+)'
+      - '^/red-hawk-central/financial-aid/[^?]*$'
+
 
   - name: policies
     include:
@@ -132,6 +140,8 @@ buckets:
       # *** FIX: allow base pages cleanly (with or without trailing slash) ***
       - '^/programs/(computer-science-(bs|ms)|information-technology-bs|data-sciences-bs|data-science-ms|cybersecurity-ms|game-development-certificate)/?$'
       - '^/general-information/($|grading-standards/[^?]*$)'
+      - '^/undergraduate-graduate-degree-requirements/($|[^?]*$)'
+
 
   - name: it-policies
     include:
@@ -159,6 +169,8 @@ policy_focus_allowlist:
   - '^/policies/(all-policies/)?[^/]*withdraw[^/]*/?$'
   - '^/policies/(all-policies/)?[^/]*leave[^/]*/?$'
   - '^/policies/(all-policies/)?[^/]*loa[^/]*/?$'
+  - '^/policies/all-policies/code-of-conduct(/|$)'
+
 
 # ---- Topic lexicon (unchanged) ----
 policy_topic_lexicon:
@@ -198,6 +210,10 @@ include_prefixes:
   - '/coursesaz/'
   - '/programs/'
   - '/general-information/'
+  - '/undergraduate-graduate-degree-requirements/'
+  - '/red-hawk-central/financial-aid/'
+
+
 
 # ---- Manual must-have pages (safety net) ----
 manual:
@@ -246,6 +262,20 @@ manual:
   # SOC hubs
   - 'https://www.montclair.edu/school-of-computing/graduate/'
   - 'https://www.montclair.edu/school-of-computing/undergraduate-students/'
+
+  - 'http://catalog.montclair.edu/undergraduate-graduate-degree-requirements/'
+  - 'http://catalog.montclair.edu/undergraduate-graduate-degree-requirements/ug-transfer-guidelines/'
+  - 'https://www.montclair.edu/red-hawk-central/financial-aid/'
+  - 'https://www.montclair.edu/academics/programs/computing-technology-certificate-online/'
+
+  # Policies: Code of Conduct (must-have)
+  - 'https://www.montclair.edu/policies/all-policies/code-of-conduct/'
+
+  # SoC: Student Advising (contains forms section)
+  - 'https://www.montclair.edu/school-of-computing/student-advising/'
+
+
+
 
 # ---- Rendering / table extraction ----
 render_js_prefixes:

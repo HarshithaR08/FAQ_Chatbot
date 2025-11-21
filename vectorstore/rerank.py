@@ -1,7 +1,7 @@
-# Created By: Harshitha (updated with Phase 3 tuning)
+# Created By: Harshitha (updated with Phase 3 tuning + MS CS + research tweaks)
 # Description: central reranker with smarter intents, term alignment,
 #              and better handling of deadlines, calendars, policies,
-#              and MS program requirements.
+#              MS program requirements, and SoC research queries.
 
 import os, random, re
 import numpy as np
@@ -9,6 +9,19 @@ import numpy as np
 # parse "Fall 2025" etc. from the query
 TERM_RX = re.compile(r"(fall|spring|summer|winter)\s+(20\d{2})", re.I)
 YEAR_RX = re.compile(r"(20\d{2})", re.I)
+
+# ---- Scholarship / program / advisor detectors ----
+SCHOLARSHIP_RX = re.compile(r"\bscholarship(s)?\b|\bgraduate assistantship(s)?\b|\bGA\b", re.I)
+GRAD_RX        = re.compile(r"\bgraduate\b|\bgrad\b|\bmaster'?s\b|\bM\.S\.\b|\bMS\b", re.I)
+UNDERGRAD_RX   = re.compile(r"\bundergraduate\b|\bfreshman\b|\bfirst[- ]year\b", re.I)
+FIN_AID_RX     = re.compile(r"financial aid|scholarship|assistantship", re.I)
+
+MASTERS_RX     = re.compile(r"\b(master'?s|MS|M\.S\.)\b", re.I)
+LIST_RX        = re.compile(r"\blist\b|\bwhat (are|is) the\b", re.I)
+SOC_RX         = re.compile(r"\bsoc\b|\bschool of computing\b", re.I)
+
+ADVISOR_RX     = re.compile(r"\badvisor\b|\badvisors\b|\badvising\b|\bprogram coordinator\b", re.I)
+
 
 # NEW: full term parser for both season + year
 def parse_term_parts(term: str):
@@ -23,6 +36,28 @@ def parse_term_parts(term: str):
         return None, None
     season, year = m.group(1).lower(), m.group(2)
     return season, year
+
+
+def parse_query_term(q: str):
+    """Legacy helper: returns the first term in the query or None."""
+    m = TERM_RX.search(q or "")
+    return (m.group(0).title() if m else None)
+
+
+def extract_all_terms_from_query(q: str) -> list[str]:
+    """
+    NEW: Extract all distinct academic terms like 'Winter 2025', 'Summer 2026'
+    from the query. Returns title-cased unique terms, in order of appearance.
+    """
+    seen = set()
+    terms = []
+    for m in TERM_RX.finditer(q or ""):
+        term = m.group(0).title()
+        if term not in seen:
+            seen.add(term)
+            terms.append(term)
+    return terms
+
 
 # ---------- deterministic seeds ----------
 def set_seeds(seed=42):
@@ -83,10 +118,6 @@ def detect_intent(q: str, cfg: dict) -> str:
     return "default"
 
 
-def parse_query_term(q: str):
-    m = TERM_RX.search(q or "")
-    return (m.group(0).title() if m else None)
-
 # ---------- simple detector for "MS program requirements" ----------
 REQ_PAT = re.compile(r"\b(requirements?|required courses?|degree requirements?|program requirements?)\b", re.I)
 MS_PAT  = re.compile(
@@ -99,9 +130,36 @@ MS_PAT  = re.compile(
     re.I,
 )
 
+# Fallback for "graduate required courses for computer science"-style queries
+GRAD_CS_FALLBACK_RX = re.compile(
+    r"\bgraduate\b.*\bcomputer\s+scienc|\bcomputer\s+scienc\b.*\bgraduate\b",
+    re.I,
+)
+
+
 def is_program_requirements_query(q: str) -> bool:
+    """
+    True when query is clearly about *program requirements* for a Master's program.
+
+    Primary:
+      - REQ_PAT (required/program/degree requirements)
+      - AND MS_PAT (MS / M.S. / master's / etc.)
+
+    Fallback:
+      - REQ_PAT + "graduate" + "computer scienc(e)" in either order,
+        so typos like 'Computer Scienc' still route to MS program logic.
+    """
     q = q or ""
-    return bool(REQ_PAT.search(q)) and bool(MS_PAT.search(q))
+    has_req = bool(REQ_PAT.search(q))
+    has_ms  = bool(MS_PAT.search(q))
+    if has_req and has_ms:
+        return True
+
+    # Fallback: grad CS wording without explicit "MS"
+    if has_req and GRAD_CS_FALLBACK_RX.search(q):
+        return True
+
+    return False
 
 # ---------- helpers for feature scoring ----------
 def _bucket_boost(chunk_meta: dict, intent: str, cfg: dict) -> float:
@@ -115,11 +173,14 @@ def _deadline_keyword_bonus(text: str, cfg: dict) -> float:
     tl = (text or "").lower()
     return 1.0 if any(k in tl for k in kws) else 0.0
 
-def _term_alignment_bonus(q_term: str, chunk_term: str) -> float:
+
+def _term_alignment_bonus_single(q_term: str, chunk_term: str) -> float:
     """
-    Symmetric helper used by both 'deadline' and 'calendar' intents.
-    Reward exact semester+year matches, lightly reward year-only matches,
-    penalize obvious mismatches.
+    ORIGINAL semantics for a single query term:
+      - +2.5 for exact season+year match
+      - +1.0 for same year only
+      - -1.0 for same year, different season
+      - -1.5 for different years
     """
     qs, qy = parse_term_parts(q_term or "")
     ts, ty = parse_term_parts(chunk_term or "")
@@ -142,6 +203,33 @@ def _term_alignment_bonus(q_term: str, chunk_term: str) -> float:
     return -1.5
 
 
+def _term_alignment_bonus(q_term, chunk_term: str) -> float:
+    """
+    Symmetric helper used by both 'deadline' and 'calendar' intents.
+
+    q_term can be:
+      - None         -> 0
+      - str          -> use single-term scoring (_term_alignment_bonus_single)
+      - list[str]    -> multi-term query; use BEST score across all
+                        terms but DO NOT apply negative penalties
+                        (we only reward matches).
+    """
+    if not q_term:
+        return 0.0
+
+    # Multi-term query: ['Winter 2025', 'Summer 2026', ...]
+    if isinstance(q_term, (list, tuple)):
+        scores = [_term_alignment_bonus_single(t, chunk_term) for t in q_term]
+        if not scores:
+            return 0.0
+        best = max(scores)
+        # Don’t punish for other terms; keep only positive signal
+        return max(best, 0.0)
+
+    # Single term (old behavior)
+    return _term_alignment_bonus_single(q_term, chunk_term)
+
+
 def apply_query_boosts(c, query: str, intent: str) -> float:
     """
     Extra feature-level bonus/penalty based on query words + candidate metadata.
@@ -158,15 +246,22 @@ def apply_query_boosts(c, query: str, intent: str) -> float:
 
     # 1) Withdrawal-deadline vs semester-end disambiguation
     if intent == "deadline":
-        # If user is clearly asking about withdrawal
+        # If user is clearly asking about withdrawal deadlines (not semester end)
         if ("withdraw" in q or "withdrawal" in q or " wd" in q) and ("semester end" not in q and "end of term" not in q):
-            # Strongly boost Add/Drop pages & withdrawal policies
+            # Strongly boost Add/Drop registrar pages & explicit withdrawal content
             if "add-drop" in url or "add/drop" in url or "withdrawal" in url \
                or "withdrawal or leave of absence from the university" in sec:
-                bonus += 0.18
-            # Slightly *demote* generic academic calendar pages
+                bonus += 0.30  # was 0.18
+
+            # Extra: if this is the add/drop TABLE and it literally mentions
+            # "Final Day to WD" or "Last Day to Withdraw Classes", make it dominate.
+            if "red-hawk-central/registrar/add-drop" in url and is_table:
+                if "final day to wd" in text or "last day to withdraw classes" in text:
+                    bonus += 0.35
+
+            # Demote generic academic calendar pages more heavily for withdraw questions
             if "academic-calendar" in url:
-                bonus -= 0.08
+                bonus -= 0.30  # was -0.08
 
         # If user is clearly asking about semester end date using 'deadline' wording
         if "semester end" in q or "end of term" in q or "last day of semester" in q:
@@ -209,7 +304,7 @@ def apply_query_boosts(c, query: str, intent: str) -> float:
     return bonus
 
 # ---------- main scoring ----------
-def score_candidate(c, intent: str, cfg: dict, query: str, q_term: str):
+def score_candidate(c, intent: str, cfg: dict, query: str, q_term):
     """
     c is a dict-like object coming from your candidate list.
     Required keys:
@@ -283,11 +378,15 @@ def score_candidate(c, intent: str, cfg: dict, query: str, q_term: str):
         if q_term:
             feats += _term_alignment_bonus(q_term, term_str or sec)
 
-            # Also reward the section heading mentioning the full "Winter 2025"
-            if q_term.lower() in sec_lower:
-                feats += 0.5
+            # Also reward the section heading mentioning the query term(s)
+            if isinstance(q_term, (list, tuple)):
+                if any(t.lower() in sec_lower for t in q_term):
+                    feats += 0.5
+            else:
+                if q_term.lower() in sec_lower:
+                    feats += 0.5
 
-        # downweight “What Is Considered a Withdrawal?” explanation sections
+        # downweight “What Is Considered a Withdrawal” explanation sections
         if "considered a withdrawal" in sec_lower:
             feats -= 0.10
 
@@ -349,8 +448,12 @@ def score_candidate(c, intent: str, cfg: dict, query: str, q_term: str):
         # Use semester/year alignment in the same way as deadline intent
         if q_term:
             feats += _term_alignment_bonus(q_term, term_str or sec)
-            if q_term.lower() in sec_lower:
-                feats += 0.4
+            if isinstance(q_term, (list, tuple)):
+                if any(t.lower() in sec_lower for t in q_term):
+                    feats += 0.4
+            else:
+                if q_term.lower() in sec_lower:
+                    feats += 0.4
 
         # demote irrelevant grading/policy/IT pages for calendar queries
         if "general-information/grading-standards" in url:
@@ -363,7 +466,6 @@ def score_candidate(c, intent: str, cfg: dict, query: str, q_term: str):
             feats -= 0.4
 
         # HARD NEGATIVE FILTER FOR CALENDAR QUERIES
-        # These pages are never the answer for "semester end date", so push them out.
 
         # IT policies (software request deadlines)
         if bucket == "it-policies" or "information-technology" in url:
@@ -396,6 +498,23 @@ def score_candidate(c, intent: str, cfg: dict, query: str, q_term: str):
             if len(text) < 500 or "available on the policies website" in text_lower:
                 feats -= 2.5  # effectively pushes it below the real policy
 
+        # Prefer Academic Integrity core page when query says 'academic integrity'
+        if "academic integrity" in q_lower:
+            if "academic-integrity" in url:
+                feats += 0.20
+            if "academic-honesty-and-integrity" in url:
+                feats -= 0.05
+
+        # Pass/Fail specific tweak: prefer the official Pass/Fail policy over SAP pages
+        if "pass/fail" in q_lower or "pass fail" in q_lower or "pass-fail" in q_lower:
+            # Strong boost for the actual pass/fail grading policy page
+            if "/policies/all-policies/pass-fail-grading" in url:
+                feats += 0.45
+
+            # Demote SAP regulations page (financial-aid context)
+            if "satisfactory-academic-progress-sap" in url:
+                feats -= 0.45
+
     # ----- program requirements for MS (catalog) -----
     if is_program_requirements_query(query):
         # strongly prefer catalog-programs sections when asking about required courses for an MS
@@ -421,7 +540,6 @@ def score_candidate(c, intent: str, cfg: dict, query: str, q_term: str):
             feats += 0.20
         
         # Penalize navigation / chrome chunk on the MS CS page
-        # (Go to Search, Print this page, University Twitter, etc.)
         nav_markers = [
             "go to search",
             "print this page",
@@ -433,6 +551,90 @@ def score_candidate(c, intent: str, cfg: dict, query: str, q_term: str):
         if ("computer-science-ms" in url) and ("requirementstext" not in url):
             if any(m in text_lower for m in nav_markers):
                 feats -= 0.60
+
+        # NEW: query-specific preference for MS *Computer Science* vs others (typo-tolerant)
+        q_cs = (
+            "computer science" in q_lower
+            or "computer scienc" in q_lower
+            or re.search(r"\bcs\b", q_lower) is not None   # treat 'CS' as Computer Science
+        )
+        if q_cs:
+            # Make MS CS win
+            if "computer-science-ms" in url:
+                feats += 0.60
+            # Push Cybersecurity down
+            if "cybersecurity-ms" in url or "cybersecurity" in text_lower:
+                feats -= 0.50
+            # Push Data Science down for CS queries
+            if "data-science-ms" in url or "data science (m.s.)" in text_lower:
+                feats -= 0.30
+
+    # ----- scholarship / funding tweaks -----
+    wants_scholarship = bool(SCHOLARSHIP_RX.search(q_lower))
+    mentions_grad     = bool(GRAD_RX.search(q_lower))
+    mentions_undergrad= bool(UNDERGRAD_RX.search(q_lower))
+
+    if wants_scholarship:
+        # Prefer financial-aid / funding pages
+        if "financial-aid" in url or FIN_AID_RX.search(text_lower):
+            feats += 0.25
+
+        # If user clearly talking about grad, demote undergrad-only chunks
+        if mentions_grad and not mentions_undergrad:
+            if "undergraduate" in text_lower and "graduate" not in text_lower:
+                feats -= 0.30
+            if "international freshman students" in text_lower:
+                feats -= 0.35
+
+        # Demote obviously undergrad scholarship tables for grad questions
+        if ("undergraduate freshman" in text_lower or "international freshman students" in text_lower) and mentions_grad:
+            feats -= 0.35
+
+    # ----- Master's program list under SoC -----
+    wants_masters_list = bool(
+        MASTERS_RX.search(q_lower)
+        and (LIST_RX.search(q_lower) or "course" in q_lower or "program" in q_lower)
+        and (SOC_RX.search(q_lower))
+    )
+
+    if wants_masters_list:
+        # Prefer SoC pages that describe graduate degrees
+        if "school-of-computing" in url and ("graduate degrees" in text_lower or "graduate programs" in text_lower):
+            feats += 0.40
+
+        # Prefer catalog MS program pages
+        if bucket == "catalog-programs" and "(m.s.)" in text_lower:
+            feats += 0.25
+
+        # Demote BS four-year-plan pages
+        if "(b.s.)" in text_lower or "fouryearplantext" in url:
+            feats -= 0.30
+
+    # ----- Advisor/advising questions -----
+    if ADVISOR_RX.search(q_lower):
+        if "advisor" in text_lower or "advisors" in text_lower:
+            feats += 0.40
+        if "school-of-computing" in url:
+            feats += 0.20
+        if "student-advising" in url or "/graduate/" in url:
+            feats += 0.25
+
+    # ----- Research-area questions for School of Computing -----
+    if "research" in q_lower and ("school of computing" in q_lower or "soc" in q_lower):
+        # Prefer SoC pages that explicitly list research areas
+        if "school-of-computing" in url and (
+            "research areas" in text_lower
+            or "core research areas" in text_lower
+            or "research areas" in sec_lower
+        ):
+            feats += 0.35
+        # Demote generic directory page
+        if "directory" in url:
+            feats -= 0.25
+
+    # ----- Generic demotion: University Writing Requirement noise -----
+    if "undergraduate-graduate-degree-requirements/university-writing-requirement" in url:
+        feats -= 0.60
 
     # ---- query-specific boosts (withdrawal vs semester-end, LOA, waitlist) ----
     feats += apply_query_boosts(c, query, intent)
@@ -451,10 +653,8 @@ def apply_diversity(sorted_candidates, cfg, intent, q_term=None, k=5):
     Special case:
       - For deadline/calendar queries *with a parsed term* (e.g. "Winter 2026"),
         we group by (bucket, term) and cap that group at 1.
-
-        This avoids showing the same Winter 2026 academic calendar chunk
-        twice just because it exists under two URLs.
     """
+    
     base_max_per = (cfg.get("diversity") or {}).get("max_per_url", 2)
     keep, seen = [], {}
 
@@ -473,7 +673,7 @@ def apply_diversity(sorted_candidates, cfg, intent, q_term=None, k=5):
             if not term_label:
                 term_label = q_term.lower()
             key = f"{bucket}##{term_label or 'no-term'}"
-            max_per = 1  # <<< IMPORTANT: only one per (bucket, term)
+            max_per = 1
 
         count = seen.get(key, 0)
         if count >= max_per:
@@ -509,7 +709,15 @@ def rerank(candidates, query: str, cfg: dict, top_k=5):
     set_seeds(42)
 
     intent = detect_intent(query, cfg)
-    q_term = parse_query_term(query)
+
+    # multi-term aware
+    all_terms = extract_all_terms_from_query(query)
+    if not all_terms:
+        q_term_for_scoring = None
+    elif len(all_terms) == 1:
+        q_term_for_scoring = all_terms[0]
+    else:
+        q_term_for_scoring = all_terms  # list[str]
 
     # annotate term match (use meta.term if present, otherwise fall back to section heading)
     for c in candidates:
@@ -519,14 +727,15 @@ def rerank(candidates, query: str, cfg: dict, top_k=5):
 
         # prefer explicit term, fall back to heading text
         term_source = term if term else sec
-        if q_term and term_source:
-            c["term_matches_query"] = (q_term.lower() in str(term_source).lower())
+        if all_terms and term_source:
+            ts = str(term_source).lower()
+            c["term_matches_query"] = any(t.lower() in ts for t in all_terms)
         else:
             c["term_matches_query"] = False
 
     # score
     for c in candidates:
-        c["final_score"] = score_candidate(c, intent, cfg, query, q_term)
+        c["final_score"] = score_candidate(c, intent, cfg, query, q_term_for_scoring)
 
     # primary sort (stable/deterministic)
     sorted_candidates = sorted(
@@ -548,6 +757,7 @@ def rerank(candidates, query: str, cfg: dict, top_k=5):
     # guardrail ordering (small)
     sorted_candidates = apply_bm25_guardrail_ordering(sorted_candidates, intent, cfg)
 
-    # diversity cap
-    top = apply_diversity(sorted_candidates, cfg, intent, q_term=q_term, k=top_k)
+    # diversity cap – use first term just for grouping
+    diversity_term = all_terms[0] if all_terms else None
+    top = apply_diversity(sorted_candidates, cfg, intent, q_term=diversity_term, k=top_k)
     return top, intent

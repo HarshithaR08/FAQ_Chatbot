@@ -1,0 +1,17 @@
+id,question,category,substring_match,EM,F1,intent,source_correct,primary_url
+Q1,What are the required courses for MS in Computer Science?,program,1,0,0.062,default,,http://catalog.montclair.edu/programs/computer-science-ms/
+Q2,What are the required courses for MS in Data Science?,program,1,0,0.169,default,,http://catalog.montclair.edu/programs/data-science-ms/
+Q3,What electives are available in the MS in Computer Science program?,program,1,0,0.046,default,,https://www.montclair.edu/school-of-computing/graduate/admission-requirements/
+Q4,What is the withdrawal deadline for Winter 2025?,deadline,1,0,0.000,deadline,,https://www.montclair.edu/red-hawk-central/registrar/add-drop/
+Q5,What is the withdrawal deadline for Summer 2026?,deadline,1,0,0.000,deadline,,https://www.montclair.edu/red-hawk-central/registrar/add-drop/
+Q6,When is the last day to add a course for Fall 2025?,deadline,1,0,0.000,deadline,,https://www.montclair.edu/red-hawk-central/registrar/add-drop/
+Q7,When is the last day to drop a course for Spring 2026?,deadline,1,0,0.000,deadline,,https://www.montclair.edu/red-hawk-central/registrar/add-drop/
+Q8,Does MSU allow medical withdrawal?,policy,1,0,0.039,default,,https://www.montclair.edu/policies/all-policies/medical-withdrawal-policy/
+Q9,What is the official MSU course withdrawal procedure?,policy,1,0,0.019,default,,https://www.montclair.edu/policies/all-policies/medical-withdrawal-policy/
+Q10,What is the pass/fail grading policy at MSU?,policy,1,0,0.056,policy,,https://www.montclair.edu/policies/all-policies/pass-fail-grading/
+Q11,What counts as academic dishonesty at MSU?,policy,1,0,0.021,default,,https://www.montclair.edu/policies/all-policies/academic-integrity/
+Q12,How do I request a leave of absence?,policy,1,0,0.078,policy,,https://www.montclair.edu/policies/all-policies/withdrawal-procedures-from-the-university/
+Q13,How do I contact academic advising?,advising,1,0,0.027,contact,,https://www.montclair.edu/red-hawk-central/registrar/registration/registration-pins/
+Q14,How do I apply for study abroad?,oge,1,0,0.045,default,,https://www.montclair.edu/red-hawk-central/financial-aid/study-abroad-financial-aid/
+Q15,Where can I find information about refunds after course withdrawal?,policy,0,0,0.000,default,,https://www.montclair.edu/policies/all-policies/refunds-and-withdrawals/
+Q16,What is the procedure for a course withdrawal exception?,policy,1,0,0.058,default,,https://www.montclair.edu/policies/all-policies/the-request-for-course-withdrawal-exception/

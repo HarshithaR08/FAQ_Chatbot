@@ -1,0 +1,17 @@
+id,question,expected_substring,category
+Q1,What are the required courses for MS in Computer Science?,CSIT 515,program
+Q2,What are the required courses for MS in Data Science?,CSIT 528 – Statistics for Data Science,program
+Q3,What electives are available in the MS in Computer Science program?,Elective Courses,program
+Q4,What is the withdrawal deadline for Winter 2025?,1/9/2025,deadline
+Q5,What is the withdrawal deadline for Summer 2026?,7/13,deadline
+Q6,When is the last day to add a course for Fall 2025?,11/11,deadline
+Q7,When is the last day to drop a course for Spring 2026?,1/26,deadline
+Q8,Does MSU allow medical withdrawal?,medical withdrawal,policy
+Q9,What is the official MSU course withdrawal procedure?,withdrawal procedure,policy
+Q10,What is the pass/fail grading policy at MSU?,pass/fail grading,policy
+Q11,What counts as academic dishonesty at MSU?,academic dishonesty,policy
+Q12,How do I request a leave of absence?,leave of absence,policy
+Q13,How do I contact academic advising?,academic advising,advising
+Q14,How do I apply for study abroad?,study abroad,oge
+Q15,Where can I find information about refunds after course withdrawal?,refunds and withdrawals,policy
+Q16,What is the procedure for a course withdrawal exception?,course withdrawal exception,policy
