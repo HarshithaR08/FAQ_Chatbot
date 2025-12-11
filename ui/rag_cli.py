@@ -9,12 +9,11 @@ MSU FAQ Chatbot — RAG CLI
 
 Design:
 - ALWAYS uses retrieval + rerank as in vectorstore.test_retrieval_query.
-- Deterministic fast-path only for:
-    * Program "required courses"/"required core courses" lists
+- Deterministic fast-path ONLY for:
     * Withdrawal deadlines from registrar Add/Drop tables
 - EVERYTHING ELSE goes through the LLM.
 
-No course lists are hardcoded. We only parse the catalog text structure.
+No course lists are hardcoded. We only bias retrieval and context for catalog pages.
 """
 
 from typing import List, Dict, Any, Tuple, Optional
@@ -72,6 +71,8 @@ def extract_deadline_from_table(text: str) -> Optional[str]:
     """
     Extract the 'Final Day to WD' / 'Final Day to Withdraw' date
     for the FULL term from a registrar Add/Drop & Withdrawal table.
+
+    NOTE: This is the ONLY fast-path we keep.
     """
     if not text:
         return None
@@ -139,10 +140,19 @@ def extract_deadline_from_table(text: str) -> Optional[str]:
     return None
 
 
-# ---------- Helper: STRUCTURED program requirements extraction ----------
+# ---------- (Optional) STRUCTURED program requirements extraction ----------
+# NOTE: helper exists but is NOT used in any fast path; all answers go through the LLM.
 
 COURSE_CODE_RX = re.compile(
-    r"^(CSIT|MATH|AMAT|STAT|PHYS)\s*[\u00A0 ]?\d{3}\b",  # handle normal + non-breaking spaces
+    r"^(CSIT|MATH|AMAT|STAT|PHYS)\s*[\u00A0 ]?\d{3}\b",
+    re.IGNORECASE,
+)
+
+COURSE_LINE_RX = re.compile(
+    r"^(?P<code>(CSIT|MATH|AMAT|STAT|PHYS)\s*[\u00A0 ]?\d{3})"
+    r"\s*[-–:]?\s*"
+    r"(?P<title>.*?)"
+    r"\s*(?:\((?P<credits>\d+)\s+credits?\))?\s*$",
     re.IGNORECASE,
 )
 
@@ -156,24 +166,14 @@ def extract_required_courses_structured(
     text: str,
 ) -> List[Dict[str, Optional[str]]]:
     """
-    Given raw catalog text for a program (one chunk), extract a structured list
-    of *required* / *required core* courses.
-
-    Strategy:
-      - Find the first "Required Courses" or "Required Core Courses" heading.
-      - From there, scan line-by-line until we hit a "stop" section ("Electives",
-        "Elective Courses", "Culminating Experience", "Total Credits").
-      - Within that block, detect triplets:
-            CODE  (e.g., CSIT 515)
-            TITLE (e.g., Software Engineering)
-            CREDITS (e.g., 3)
-        We pair code + title, credits optional.
-      - Deduplicate by course code.
+    NOT used in normal flow; kept only as a debugging helper.
     """
     if not text:
         return []
 
-    lines = [ln.strip() for ln in text.splitlines()]
+    raw_lines = text.splitlines()
+    lines = [ln.strip() for ln in raw_lines]
+
     if not lines:
         return []
 
@@ -191,58 +191,80 @@ def extract_required_courses_structured(
     # Collect lines until a stopping section
     block: List[str] = []
     for ln in lines[start_idx:]:
-        if STOP_SECTION_RX.match(ln.strip()):
+        s = ln.strip()
+        if not s:
+            block.append("")
+            continue
+        if STOP_SECTION_RX.match(s):
             break
-        block.append(ln.strip())
+        block.append(s)
 
     courses: List[Dict[str, Optional[str]]] = []
     seen_codes = set()
     i = 0
     n = len(block)
 
+    def _record_course(code: str, title: Optional[str], credits: Optional[str]):
+        norm_code = (code or "").upper().replace("\u00A0", " ").strip()
+        if not norm_code:
+            return
+        if norm_code in seen_codes:
+            return
+        seen_codes.add(norm_code)
+        courses.append(
+            {
+                "code": norm_code,
+                "title": (title or "").strip() or None,
+                "credits": (credits or "").strip() or None,
+            }
+        )
+
     while i < n:
-        line = block[i]
-        m = COURSE_CODE_RX.match(line)
-        if not m:
+        line = block[i].strip()
+        if not line:
             i += 1
             continue
 
-        code = line  # e.g. "CSIT 515"
+        # 1) Try single-line pattern first
+        m_full = COURSE_LINE_RX.match(line)
+        if m_full:
+            code = m_full.group("code") or ""
+            title = (m_full.group("title") or "").strip() or None
+            credits = m_full.group("credits")
+            _record_course(code, title, credits)
+            i += 1
+            continue
 
-        # Look ahead for title (next non-empty line)
+        # 2) Fallback: code-only line with title/credits on subsequent lines
+        m_code = COURSE_CODE_RX.match(line)
+        if not m_code:
+            i += 1
+            continue
+
+        code = m_code.group(0).strip()
+
+        # Look ahead for title
         title = None
         credits = None
 
         j = i + 1
-        while j < n and not block[j]:
+        while j < n and not block[j].strip():
             j += 1
         if j < n:
-            # If the next line is clearly not another course code or header, treat as title
-            if not COURSE_CODE_RX.match(block[j]) and not STOP_SECTION_RX.match(block[j]):
+            if not COURSE_CODE_RX.match(block[j]) and not STOP_SECTION_RX.match(block[j].strip()):
                 title = block[j].strip()
                 j += 1
 
-        # Look ahead for credits: a small integer on its own line
+        # Look ahead for credits
         k = j
-        while k < n and not block[k]:
+        while k < n and not block[k].strip():
             k += 1
         if k < n:
-            if re.fullmatch(r"\d{1,2}", block[k]):
+            if re.fullmatch(r"\d{1,2}", block[k].strip()):
                 credits = block[k].strip()
-                # do not necessarily need to skip k; we just move i forward enough
 
-        norm_code = code.upper()
-        if norm_code not in seen_codes:
-            seen_codes.add(norm_code)
-            courses.append(
-                {
-                    "code": code,
-                    "title": title,
-                    "credits": credits,
-                }
-            )
+        _record_course(code, title, credits)
 
-        # Move i forward to avoid re-processing same lines too much
         i = max(i + 1, j, k)
 
     return courses
@@ -292,7 +314,7 @@ def _build_candidates_for_query(
 
 def retrieve_top_chunks(
     query: str,
-    top_k: int = 6,
+    top_k: int = 5,
 ) -> Tuple[List[Dict[str, Any]], str]:
     """
     Use the SAME retrieval + rerank pipeline as vectorstore.test_retrieval_query.ask.
@@ -304,7 +326,7 @@ def retrieve_top_chunks(
     coll = get_collection()
     terms = extract_all_terms(query)
 
-    # If this looks like an MS program requirements query,
+    # If this looks like a program requirements query,
     # restrict retrieval to catalog-programs (official catalog pages).
     bucket_filter = "catalog-programs" if is_program_requirements_query(query) else None
 
@@ -352,82 +374,7 @@ def retrieve_top_chunks(
     return top_chunks, intent
 
 
-# ---------- Program requirements fast path ----------
-
-def try_program_requirements_answer(
-    query: str,
-    chunks: List[Dict[str, Any]],
-) -> Optional[Tuple[str, Dict[str, Any]]]:
-    """
-    Deterministic answer builder for questions like:
-      - 'What are the required courses for MS in Computer Science?'
-      - 'Give me the required core courses for MS in Data Science.'
-
-    Uses ONLY the retrieved catalog-programs chunks and extracts course
-    lines from the "Required Courses" / "Required Core Courses" block.
-
-    Returns (answer_text, primary_source_chunk) or None.
-    """
-    if not chunks:
-        return None
-
-    if not is_program_requirements_query(query):
-        return None
-
-    # Prefer catalog-programs chunks
-    best_chunk = None
-    fallback_chunk = None
-
-    for c in chunks:
-        meta = c.get("meta", {}) or {}
-        bucket = meta.get("bucket", "")
-        if bucket != "catalog-programs":
-            continue
-
-        if fallback_chunk is None:
-            fallback_chunk = c
-
-        # Heuristic: prefer sections whose heading looks like a program page
-        sec = (c.get("section_heading") or "").lower()
-        if "data science (m.s.)" in sec or "computer science (m.s.)" in sec:
-            best_chunk = c
-            break
-
-    target = best_chunk or fallback_chunk
-    if not target:
-        return None
-
-    text = target.get("text", "") or ""
-    courses = extract_required_courses_structured(text)
-
-    # If we couldn't find any course-looking lines, bail out to LLM
-    if len(courses) == 0:
-        return None
-
-    # Build bullet list with "CODE – Title (credits)" where available
-    bullets = []
-    for c in courses:
-        code = c.get("code") or ""
-        title = c.get("title") or ""
-        credits = c.get("credits")
-        if credits:
-            bullets.append(f"* {code} – {title} ({credits} credits)")
-        else:
-            bullets.append(f"* {code} – {title}" if title else f"* {code}")
-
-    bullet_list = "\n".join(bullets)
-
-    answer = (
-        "According to the official Montclair State University catalog [1], "
-        "the Required Courses for this program are:\n\n"
-        f"{bullet_list}\n\n"
-        "These courses come from the 'Program Requirements' section of the catalog."
-    )
-
-    return answer, target
-
-
-# ---------- Prompt building (LLM fallback) ----------
+# ---------- Program-related catalog filtering (NO extra fast-path) ----------
 
 def filter_catalog_chunks_for_requirements(
     query: str,
@@ -435,15 +382,9 @@ def filter_catalog_chunks_for_requirements(
 ) -> List[Dict[str, Any]]:
     """
     For queries clearly about program/degree requirements, prefer catalog
-    sections that match what the user is asking:
+    sections that match what the user is asking.
 
-    - If they ask about 'required courses' / 'program requirements':
-        keep 'Required Courses' / 'Program Requirements' sections.
-    - If they ask about 'elective(s)':
-        keep 'Elective' sections.
-
-    This does NOT hard-code any actual course data; it just chooses which
-    catalog sections to show to the LLM.
+    Still no hardcoding of course data; we only pick which sections to show.
     """
     if not chunks:
         return chunks
@@ -457,7 +398,6 @@ def filter_catalog_chunks_for_requirements(
         or "degree requirements" in q_low
     )
 
-    # If it isn't a program-requirements-style query, leave chunks as-is
     if not (wants_required or wants_electives or is_program_requirements_query(query)):
         return chunks
 
@@ -466,12 +406,10 @@ def filter_catalog_chunks_for_requirements(
         sec = (c.get("section_heading") or "").lower()
         bucket = (c.get("meta", {}) or {}).get("bucket", "")
 
-        # Only apply this special logic to catalog-programs chunks
         if bucket != "catalog-programs":
             filtered.append(c)
             continue
 
-        # Required/program requirements path
         if wants_required and not wants_electives:
             if (
                 "required courses" in sec
@@ -486,7 +424,6 @@ def filter_catalog_chunks_for_requirements(
                 filtered.append(c)
             continue
 
-        # Elective path
         if wants_electives and not wants_required:
             if "elective" in sec:
                 filtered.append(c)
@@ -494,17 +431,30 @@ def filter_catalog_chunks_for_requirements(
                 filtered.append(c)
             continue
 
-        # If both required and electives are in the question, don't filter at all.
         filtered.append(c)
 
     return filtered or chunks
-
 
 def build_messages(
     query: str,
     top_chunks: List[Dict[str, Any]],
 ) -> List[Dict[str, str]]:
+    """
+    Build the chat messages for LLaMA.
+
+    This version is intentionally lighter:
+    - Shorter system prompt.
+    - Smaller snippets.
+    - At most 6 chunks sent to the model.
+    - MUCH stricter rules against personalized credit math / hallucinated counts.
+    """
     filtered_chunks = filter_catalog_chunks_for_requirements(query, top_chunks)
+
+    # HARD CAP: only send up to 6 chunks into the LLM, no matter what.
+    filtered_chunks = filtered_chunks[:6]
+
+    # Smaller snippets to keep context size under control
+    snippet_max = 1000
 
     context_blocks = []
     for i, c in enumerate(filtered_chunks, 1):
@@ -513,42 +463,64 @@ def build_messages(
         text = c.get("text", "") or ""
         sec = c.get("section_heading") or ""
 
-        snippet = text[:1200] + ("…" if len(text) > 1200 else "")
-        sec_line = f"Section: {sec}\n" if sec else ""
+        snippet = text[:snippet_max] + ("…" if len(text) > snippet_max else "")
+
+        # Clean headings like "H2: 2025-2026 Edition"
+        sec_clean = sec
+        if sec_clean.startswith("H") and ":" in sec_clean[:4]:
+            sec_clean = sec_clean.split(":", 1)[1].strip()
+
+        sec_line = f"Section: {sec_clean}\n" if sec_clean else ""
 
         context_blocks.append(
-            f"[{i}] Source: {url}\n"
-            f"Bucket: {meta.get('bucket', '')}\n"
+            f"[{i}] Source URL: {url}\n"
             f"{sec_line}"
             f"{snippet}"
         )
 
     context = "\n\n".join(context_blocks) if context_blocks else "(no context found)"
 
+    # === STRICT system prompt ===
     system_prompt = (
         "You are the Montclair State University FAQ assistant.\n"
         "You answer questions about deadlines, academic policies, registrar rules, and School of Computing information.\n"
-        "You are given short excerpts copied from official Montclair State University web pages (labeled [1], [2], etc.).\n"
-        "Use ONLY this information when you answer.\n"
-        "If the answer is not clearly stated in the context, say that you are not sure because it is not present "
-        "in these excerpts, and suggest who the student should contact.\n"
-        "Do NOT claim that Montclair State University or the catalog 'does not list' something unless the text "
-        "explicitly says so.\n"
+        "You are given short excerpts from official Montclair State University web pages (labeled [1], [2], etc.).\n"
+        "Use ONLY the information in these excerpts.\n"
         "\n"
-        "When you DO know the answer, you MUST:\n"
-        "  - Extract the exact date / rule / requirement from the excerpts.\n"
-        "  - For questions about 'required courses', 'required core courses', 'program requirements', or 'degree requirements', "
-        "you must list the required courses exactly as they appear in the context (course codes, titles, and credit counts), "
-        "without inventing or omitting courses.\n"
-        "  - Distinguish clearly between 'Required Courses', 'Required Core Courses', 'Electives', and 'Culminating Experience' sections.\n"
-        "  - Answer concisely in 2–4 sentences.\n"
-        "  - Add a citation like [1] or [2] pointing to the excerpt index that directly supports your answer.\n"
+        "General rules:\n"
+        "  - If the answer is not clearly stated in the excerpts, say you are not sure and suggest which office or page to contact.\n"
+        "  - Do NOT guess or fill in missing details for dates, credit totals, course lists, or test scores.\n"
+        "  - Do NOT mention internal words like 'snippet', 'chunk', 'Bucket', or 'context above'.\n"
+        "  - When you refer to a fact, attach a citation like [1] or [2] pointing to the excerpt that contains it.\n"
         "\n"
-        "Important style rules:\n"
-        "  - Do NOT mention 'snippets', 'chunks', 'context above', or anything about how the data was retrieved.\n"
-        "  - Instead, phrase answers like 'According to the Registrar's Add/Drop & Withdrawal calendar [1]...' or\n"
-        "    'According to the official Montclair State University catalog [1]...'.\n"
-        "  - Never guess dates or policies that are not clearly present.\n"
+        "Program requirements / required and elective courses:\n"
+        "  - When the question is about required courses, program requirements, or degree requirements, copy course codes,\n"
+        "    titles, and credit values exactly as they appear in the excerpts. Do not invent or rename courses.\n"
+        "  - You may list elective courses that appear in the excerpts, but you must NOT invent or assume how many electives\n"
+        "    the student must choose unless the exact number of courses or credits is written explicitly in the excerpts.\n"
+        "    For example, only say '5 additional courses' if a sentence like 'choose 5 courses from the following' or\n"
+        "    '5 additional courses' appears verbatim.\n"
+        "  - If a title or credit value is cut off in the excerpt, say that it is not fully visible instead of guessing.\n"
+        "\n"
+        "Per-student credit / remaining-credits questions:\n"
+        "  - You may state the TOTAL credits required for a degree or section only when that total appears in the excerpts\n"
+        "    (for example, 'A minimum of 30 semester hours of graduate credit is required' [1]).\n"
+        "  - Even if the student tells you what they have already completed (for example, 'I finished 4 required courses'),\n"
+        "    you must NOT compute or state how many more credits or courses they personally need. Do NOT say things like\n"
+        "    'you still need 2 more courses' or 'you need X more credits'.\n"
+        "  - Instead, repeat the official totals (e.g., 'the degree requires 30 credits in total [1]') and advise them to\n"
+        "    check Degree Works or speak with their academic advisor or Graduate Program Coordinator to see their exact\n"
+        "    remaining credits.\n"
+        "\n"
+        "Different student levels:\n"
+        "  - If excerpts show different rules for undergraduate, graduate, or doctoral students, clearly separate them and say\n"
+        "    which rule applies to which group.\n"
+        "\n"
+        "English test scores:\n"
+        "  - For English proficiency tables, list the exam names and minimum scores exactly as shown, and note when scores differ\n"
+        "    for undergrad vs graduate applicants.\n"
+        "\n"
+        "Answer concisely in 2–4 sentences unless the question explicitly asks for a detailed list of courses.\n"
     )
 
     user_content = (
@@ -564,15 +536,62 @@ def build_messages(
     return messages
 
 
+ADVISOR_WORDS = (
+    "advisor",
+    "advisors",
+    "advising",
+    "gpc",
+    "graduate program coordinator",
+    "graduate program chair",
+)
+
+
+def pick_primary_source(query: str, chunks: list[dict]) -> dict | None:
+    """
+    Heuristic: choose the most likely relevant chunk as primary_source.
+    - For advisor / GPC questions: prefer School of Computing pages that
+      mention advisors or GPC in the text.
+    - Otherwise: fall back to chunks[0].
+    """
+    if not chunks:
+        return None
+
+    ql = (query or "").lower()
+
+    if any(w in ql for w in ADVISOR_WORDS):
+        best = None
+        for c in chunks:
+            url = (c.get("url") or "").lower()
+            text = (c.get("text") or "").lower()
+
+            if "school-of-computing" in url and (
+                "advisor" in text
+                or "advisors" in text
+                or "graduate program coordinator" in text
+                or "gpc" in text
+            ):
+                best = c
+                break
+
+        if best is None:
+            best = chunks[0]
+    else:
+        best = chunks[0]
+
+    meta0 = (best.get("meta", {}) or {})
+    return {
+        "idx": 1,
+        "url": best.get("url", ""),
+        "bucket": meta0.get("bucket", ""),
+        "title": best.get("section_heading") or meta0.get("title", ""),
+    }
+
+
 # ---------- LLaMA 3 call + deterministic fast-paths ----------
 
-def answer_with_sources(query: str, top_k: int = 6) -> dict:
+def answer_with_sources(query: str, top_k: int = 5) -> dict:
     """
     Convenience wrapper around generate_answer() for evaluation scripts.
-
-    This DOES NOT change any chatbot behavior.
-    It just exposes the same pipeline (including fast paths)
-    in a structured form.
     """
     answer, primary_source, intent = generate_answer(query, top_k=top_k)
     return {
@@ -584,32 +603,17 @@ def answer_with_sources(query: str, top_k: int = 6) -> dict:
 
 def generate_answer(
     query: str,
-    top_k: int = 6,
+    top_k: int = 5,
 ) -> Tuple[str, Optional[Dict[str, Any]], str]:
     """
     Full RAG: retrieve -> (maybe deterministic answer) -> LLaMA 3.
 
-    Returns:
-        answer: str
-        primary_source: Optional[dict]
-        intent: str
+    Fast-path is ONLY used for withdrawal/deadline questions.
+    All other questions go through the LLM.
     """
+    # For program requirements queries, we *do not* bump top_k too high to avoid OOM.
     chunks, intent = retrieve_top_chunks(query, top_k=top_k)
     print(f"[diagnostic] detected_intent={intent!r}   retrieved_chunks={len(chunks)}")
-
-    # ----- PROGRAM REQUIREMENTS FAST-PATH -----
-    prog_fast = try_program_requirements_answer(query, chunks)
-    if prog_fast is not None:
-        answer, primary_chunk = prog_fast
-        meta0 = (primary_chunk.get("meta", {}) or {})
-        primary_source = {
-            "idx": 1,
-            "url": primary_chunk.get("url", ""),
-            "bucket": meta0.get("bucket", ""),
-            "title": primary_chunk.get("section_heading") or meta0.get("title", ""),
-        }
-        print("[diagnostic] using PROGRAM-REQUIREMENTS fast path")
-        return answer, primary_source, intent
 
     # ----- DEADLINE FAST-PATH: read registrar table(s) directly -----
     if intent == "deadline" and chunks:
@@ -695,9 +699,12 @@ def generate_answer(
         add_generation_prompt=True,
     )
 
+    # smaller generation length to reduce memory
+    max_new_tokens = 200
+
     outputs = pipe(
         prompt,
-        max_new_tokens=320,
+        max_new_tokens=max_new_tokens,
         do_sample=False,
         temperature=0.2,
         pad_token_id=tok.eos_token_id,
@@ -706,16 +713,7 @@ def generate_answer(
     full_text = outputs[0]["generated_text"]
     answer = full_text[len(prompt):].strip()
 
-    primary_source: Optional[Dict[str, Any]] = None
-    if chunks:
-        c0 = chunks[0]
-        meta0 = c0.get("meta", {}) or {}
-        primary_source = {
-            "idx": 1,
-            "url": c0.get("url", ""),
-            "bucket": meta0.get("bucket", ""),
-            "title": c0.get("section_heading") or meta0.get("title", ""),
-        }
+    primary_source = pick_primary_source(query, chunks)
 
     return answer, primary_source, intent
 
@@ -741,7 +739,7 @@ def main():
             break
 
         try:
-            answer, primary_source, intent = generate_answer(q, top_k=6)
+            answer, primary_source, intent = generate_answer(q, top_k=5)
         except Exception as e:
             print(f"[error] {e}")
             continue
@@ -761,6 +759,7 @@ def main():
             print(f"[1] {url}{extra}")
         else:
             print("(no primary source found)")
+
         print()
 
 

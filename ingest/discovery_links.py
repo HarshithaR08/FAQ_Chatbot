@@ -2,50 +2,63 @@
 # Purpose: Harvest deep links from a few seed pages and return (url, lastmod, bucket)
 
 from __future__ import annotations
-from .fetch_from_sitemap import compile_rules, first_matching_bucket, globally_excluded
-import logging, re, yaml, requests
-from urllib.parse import urljoin, urlparse, urlunparse
-from typing import List, Tuple
-from bs4 import BeautifulSoup
-from urllib.parse import urlsplit, urlunsplit
 
+import logging
+import re
+from typing import List, Tuple
+from urllib.parse import urljoin, urlparse, urlunparse, urlsplit, urlunsplit
+
+import requests
+import yaml
+from bs4 import BeautifulSoup
+
+from .fetch_from_sitemap import compile_rules, first_matching_bucket, globally_excluded
 
 USER_AGENT = "MSU-FAQ-Bot/0.1 (contact: ramakrishnah1@montclair.edu)"
-# CHANGE (Adaptability Enhancement):
+
 # Try common sitemap endpoints on new hosts (e.g., catalog.montclair.edu) so we can auto-enroll them.
 AUTO_SITEMAP_CANDIDATES = ["sitemap.xml", "sitemap_index.xml", "wp-sitemap.xml"]
 
 
 def normalize_url(url: str) -> str | None:
+    """Normalize URLs to:
+    - force http for catalog.montclair.edu
+    - force https for *.montclair.edu
+    - enforce trailing slash when path is not a file
+    - strip query/fragment
+    Returns None for off-domain.
+    """
     if not url:
         return None
+
     s = urlsplit(url.strip())
     host = s.netloc.lower()
+
     if host.endswith("catalog.montclair.edu"):
         scheme = "http"
     elif host.endswith("montclair.edu"):
         scheme = "https"
     else:
         return None  # off-domain
-    # ensure trailing slash on path unless a file name is present
+
     path = s.path
+    # ensure trailing slash on path unless a file name is present (has a dot in last segment)
     if path and not path.endswith("/") and "." not in path.rsplit("/", 1)[-1]:
         path = path + "/"
+
     return urlunsplit((scheme, host, path, "", ""))
 
 
-def setup_logger():
+def setup_logger() -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s | %(levelname)-8s | %(message)s",
-        datefmt="%H:%M:%S"
+        datefmt="%H:%M:%S",
     )
 
-# CHANGE (Adaptability Enhancement):
-# Probe a whitelisted domain for a sitemap; if found, we will remember it and use it next runs.
-# auto discover sitemaps for whitelisted new hosts
+
 def try_autodiscover_sitemap_for_host(host: str, ua: str) -> str | None:
-    import requests
+    """Probe a whitelisted domain for a sitemap; if found, return its URL."""
     for path in AUTO_SITEMAP_CANDIDATES:
         url = f"https://{host}/{path}"
         try:
@@ -53,30 +66,40 @@ def try_autodiscover_sitemap_for_host(host: str, ua: str) -> str | None:
             if r.status_code == 200 and "<sitemap" in r.text:
                 return url
         except Exception:
+            # best-effort only
             pass
     return None
 
-def load_cfg(path="sources.yaml"):
+
+def load_cfg(path: str = "sources.yaml"):
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
+
 def _norm_url(u: str) -> str | None:
-    if not u: return None
+    """Unused helper; kept for completeness."""
+    if not u:
+        return None
     p = urlparse(u)
     if not p.scheme or not p.netloc:  # skip relative here; we resolve later
         return None
     p = p._replace(params="", query="", fragment="")
     return urlunparse(p)
 
+
 def _is_allowed_host(u: str, host_whitelist: list[str]) -> bool:
     host = (urlparse(u).hostname or "").lower()
     wl = {h.lower() for h in (host_whitelist or [])}
     return host in wl
 
+
 def _path_allowed(path: str, allow, block) -> bool:
-    if any(rx.search(path) for rx in block): return False
-    if not allow: return True
+    if any(rx.search(path) for rx in block):
+        return False
+    if not allow:
+        return True
     return any(rx.search(path) for rx in allow)
+
 
 def harvest_from_seed(seed_url: str, cfg) -> list[str]:
     logging.info(f"Seed → {seed_url}")
@@ -89,6 +112,7 @@ def harvest_from_seed(seed_url: str, cfg) -> list[str]:
 
     soup = BeautifulSoup(r.text, "lxml")
     links = set()
+
     for a in soup.find_all("a", href=True):
         abs_url = urljoin(seed_url, a["href"].strip())
         abs_url = normalize_url(abs_url)
@@ -100,7 +124,7 @@ def harvest_from_seed(seed_url: str, cfg) -> list[str]:
     allow = [re.compile(p) for p in disc.get("path_allowlist", [])]
     block = [re.compile(p) for p in disc.get("path_blocklist", [])]
 
-    kept = []
+    kept: list[str] = []
     for u in links:
         if not _is_allowed_host(u, host_whitelist):
             continue
@@ -111,6 +135,7 @@ def harvest_from_seed(seed_url: str, cfg) -> list[str]:
 
     logging.info(f"Seed kept {len(kept)} after domain/path filters")
     return sorted(kept)
+
 
 # Returns list of (url, lastmod, bucket) from discovery seeds.
 def discover_links(cfg) -> List[Tuple[str, str, str]]:
@@ -142,12 +167,12 @@ def discover_links(cfg) -> List[Tuple[str, str, str]]:
             out.append((u, "", bucket))
 
     logging.info(f"Discovery total kept: {len(out)}")
-        # Optional auto-sitemap discovery for new, whitelisted hosts ===
-    # CHANGE (Adaptability Enhancement):
-    # If enabled, auto-detect sitemaps for new whitelisted hosts we saw in discovered links,
-    # then store them in state/last_run.json so run_all.py will include them next time.
+
+    # Optional auto-sitemap discovery for new, whitelisted hosts
     if disc.get("autositemap"):
-        import json, os
+        import json
+        import os
+
         seen_hosts = set()
         for (u, _, _) in out:
             h = (urlparse(u).hostname or "").lower()
@@ -162,10 +187,10 @@ def discover_links(cfg) -> List[Tuple[str, str, str]]:
             except Exception:
                 pass
 
-        wl = set((disc.get("domain_whitelist") or []))
+        wl = set(disc.get("domain_whitelist") or [])
         todo_hosts = [h for h in seen_hosts if h in wl and h not in existing_hosts]
 
-        new_sitemaps = []
+        new_sitemaps: list[str] = []
         for host in todo_hosts:
             sm = try_autodiscover_sitemap_for_host(host, USER_AGENT)
             if sm:
@@ -177,18 +202,19 @@ def discover_links(cfg) -> List[Tuple[str, str, str]]:
             state = {}
             if os.path.exists(state_path):
                 try:
-                    state = json.load(open(state_path, "r"))
+                    with open(state_path, "r") as f:
+                        state = json.load(f)
                 except Exception:
                     state = {}
             state.setdefault("autodiscovered_sitemaps", [])
             for sm in new_sitemaps:
                 if sm not in state["autodiscovered_sitemaps"]:
                     state["autodiscovered_sitemaps"].append(sm)
-            # CHANGE (Adaptability Enhancement):
             # Persist newly found sitemaps so future runs load them automatically (no manual YAML edit needed).
             with open(state_path, "w") as f:
                 json.dump(state, f, indent=2)
             logging.info(f"Auto-discovered sitemaps: {new_sitemaps}")
+
     return out
 
 

@@ -36,3 +36,10 @@ seeds:
     must_any: ["study abroad", "global engagement", "OGE"]
     prefer_any: ["apply", "application", "eligibility"]
     max_answer_chars: 900
+
+  - topic: graduate-degree
+    question: "How many credits do I need to complete a typical graduate degree at Montclair State?"
+    must_any: ["graduate", "credits", "degree requirements"]
+    prefer_any: ["total credits", "graduate degree", "master's"]
+    max_answer_chars: 900
+

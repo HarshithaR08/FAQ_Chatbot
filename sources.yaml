@@ -1,6 +1,5 @@
 # Developer: Harshitha
 # MSU FAQ Chatbot crawl config (SOC + Academics Programs + Registrar + Policies + Student Services + OGE)
-# Date: 11 Nov 2025
 
 site:
   base: 'https://www.montclair.edu'
@@ -60,13 +59,13 @@ discovery:
     # Policies (including category pages we need)
     - '^/policies/($|all-policies/[^/]+/?$|category/academic/[^?]*$)'
 
-    # OGE (Global) incl. grad students
-    - '^/global/($|how-to-apply/[^?]*$|how-to-apply-for-a-form-i-20/?$|accepted-students/[^?]*$|current-students/[^?]*$|current-students/(f-1-students|j-1-students)/[^?]*$|12-month-opt-reporting-requirements/[^?]*$|opt-reporting/[^?]*$|leave-of-absence/[^?]*$|h-1b-cap-gap-extension/[^?]*$|graduate-students/[^?]*$)'
+    # OGE (Global) incl. grad, appointments, contact, J-1
+    - '^/global/[^?]*$'
 
     # Catalog: courses + programs + general information
     - '^/coursesaz/(csit|csam|cmp-bc)/($|[^?]+)$'
 
-    # *** FIX: allow base program pages with or without trailing slash; no extra char required ***
+    # Program pages
     - '^/programs/(computer-science-(bs|ms)|information-technology-bs|data-sciences-bs|data-science-ms|cybersecurity-ms|game-development-certificate)/?$'
 
     - '^/general-information/($|grading-standards/[^?]*$)'
@@ -75,7 +74,6 @@ discovery:
     - '^/undergraduate-graduate-degree-requirements/($|[^?]*$)'
 
     - '^/red-hawk-central/financial-aid/[^?]*$'
-
 
   path_blocklist:
     - '/search'
@@ -115,7 +113,6 @@ buckets:
       - '^/red-hawk-central/registrar/($|[^?]+)'
       - '^/red-hawk-central/financial-aid/[^?]*$'
 
-
   - name: policies
     include:
       - '^/policies/all-policies/[^/][^?]+/?$'
@@ -129,7 +126,7 @@ buckets:
 
   - name: oge
     include:
-      - '^/global/($|how-to-apply/[^?]*$|how-to-apply-for-a-form-i-20/?$|accepted-students/[^?]*$|current-students/[^?]*$|current-students/(f-1-students|j-1-students)/[^?]*$|12-month-opt-reporting-requirements/[^?]*$|opt-reporting/[^?]*$|leave-of-absence/[^?]*$|h-1b-cap-gap-extension/[^?]*$|graduate-students/[^?]*$)'
+      - '^/global/[^?]*$'
 
   - name: catalog-courses
     include:
@@ -137,11 +134,9 @@ buckets:
 
   - name: catalog-programs
     include:
-      # *** FIX: allow base pages cleanly (with or without trailing slash) ***
       - '^/programs/(computer-science-(bs|ms)|information-technology-bs|data-sciences-bs|data-science-ms|cybersecurity-ms|game-development-certificate)/?$'
       - '^/general-information/($|grading-standards/[^?]*$)'
       - '^/undergraduate-graduate-degree-requirements/($|[^?]*$)'
-
 
   - name: it-policies
     include:
@@ -154,7 +149,16 @@ buckets:
 
   - name: uploads-pdf
     include:
-      - '^/wp-content/uploads/.*\\.pdf$'
+      - '^/(?:[^/]+/)*wp-content/uploads/.*\.pdf$'
+
+  - name: catalog-programs-pdf
+    include:
+      - '^/programs/[^/]+/[^/]+\.pdf$'
+
+  # NEW: catalog-root-pdf for degree requirements PDF under /undergraduate-graduate-degree-requirements/
+  - name: catalog-root-pdf
+    include:
+      - '^/undergraduate-graduate-degree-requirements/.*\.pdf$'
 
 # ---- Focused policy allowlist (unchanged core topics) ----
 policy_focus_allowlist:
@@ -170,7 +174,6 @@ policy_focus_allowlist:
   - '^/policies/(all-policies/)?[^/]*leave[^/]*/?$'
   - '^/policies/(all-policies/)?[^/]*loa[^/]*/?$'
   - '^/policies/all-policies/code-of-conduct(/|$)'
-
 
 # ---- Topic lexicon (unchanged) ----
 policy_topic_lexicon:
@@ -212,8 +215,9 @@ include_prefixes:
   - '/general-information/'
   - '/undergraduate-graduate-degree-requirements/'
   - '/red-hawk-central/financial-aid/'
-
-
+  - '/graduate/'
+  - '/graduate-students/'
+  - '/combined-programs/'
 
 # ---- Manual must-have pages (safety net) ----
 manual:
@@ -240,6 +244,9 @@ manual:
   # Registrar + Academic calendar
   - 'https://www.montclair.edu/academics/academic-calendar/'
   - 'https://www.montclair.edu/red-hawk-central/registrar/'
+  - 'https://www.montclair.edu/red-hawk-central/registrar/academic-regulations/'
+  - 'https://www.montclair.edu/red-hawk-central/registrar/grades/'
+  - 'https://www.montclair.edu/red-hawk-central/registrar/request-transcripts/'
 
   # Policies (category + core policies)
   - 'https://www.montclair.edu/policies/category/academic/'
@@ -262,20 +269,34 @@ manual:
   # SOC hubs
   - 'https://www.montclair.edu/school-of-computing/graduate/'
   - 'https://www.montclair.edu/school-of-computing/undergraduate-students/'
+  - 'https://www.montclair.edu/school-of-computing/student-advising/'
 
+  # Catalog degree requirements + transfer guidelines + financial aid
   - 'http://catalog.montclair.edu/undergraduate-graduate-degree-requirements/'
   - 'http://catalog.montclair.edu/undergraduate-graduate-degree-requirements/ug-transfer-guidelines/'
   - 'https://www.montclair.edu/red-hawk-central/financial-aid/'
   - 'https://www.montclair.edu/academics/programs/computing-technology-certificate-online/'
 
+  # NEW: grad / combined pages
+  - 'https://www.montclair.edu/graduate/stem/'
+  - 'https://www.montclair.edu/combined-programs/faqs/'
+
+  # NEW: key PDFs (degree requirements + grad policies)
+  - 'http://catalog.montclair.edu/undergraduate-graduate-degree-requirements/undergraduate-graduate-degree-requirements.pdf'
+  - 'https://www.montclair.edu/graduate-students/wp-content/uploads/sites/256/2024/09/Graduate-School-Policies-2024-2025-1.pdf'
+
+  # NEW: catalog program PDFs (CS / DS / IT etc.)
+  - 'http://catalog.montclair.edu/programs/computer-science-bs/computer-science-bs.pdf'
+  - 'http://catalog.montclair.edu/programs/data-science-ms/data-science-ms.pdf'
+  - 'http://catalog.montclair.edu/coursesaz/csit/csit.pdf'
+  - 'http://catalog.montclair.edu/programs/computer-science-ms/computer-science-ms.pdf'
+  - 'http://catalog.montclair.edu/programs/information-technology-bs/information-technology-bs.pdf'
+  - 'http://catalog.montclair.edu/programs/computer-science-minor/computer-science-minor.pdf'
+  - 'http://catalog.montclair.edu/programs/computer-science-combined-bs-ms-data-science/computer-science-combined-bs-ms-data-science.pdf'
+  - 'http://catalog.montclair.edu/programs/information-technology-ms/information-technology-ms.pdf'
+
   # Policies: Code of Conduct (must-have)
   - 'https://www.montclair.edu/policies/all-policies/code-of-conduct/'
-
-  # SoC: Student Advising (contains forms section)
-  - 'https://www.montclair.edu/school-of-computing/student-advising/'
-
-
-
 
 # ---- Rendering / table extraction ----
 render_js_prefixes:
@@ -344,6 +365,11 @@ allowed_buckets:
   - oge
   - catalog-courses
   - catalog-programs
+  - uploads-pdf
+  - policies-pdf
+  - it-policies
+  - catalog-programs-pdf
+  - catalog-root-pdf
 
 # ---- Output paths ----
 paths:

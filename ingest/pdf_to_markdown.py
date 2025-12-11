@@ -1,58 +1,82 @@
 # Developer Name: Harshitha
 # Turn PDF stubs (-pdf.md) into real Markdown by extracting text from data/raw/*.pdf
 
-import os, re, logging, yaml, frontmatter
+import os
+import re
+import logging
 from pathlib import Path
+
+import yaml
+import frontmatter
 from pdfminer.high_level import extract_text
 
+
 def setup_logger():
-    # our logs
+    """Configure logging for PDF extraction."""
     logging.basicConfig(
         level=logging.INFO,  # was DEBUG; INFO is enough now
         format="%(asctime)s | %(levelname)-8s | %(message)s",
         datefmt="%H:%M:%S",
-        force=True
+        force=True,
     )
     # hush pdfminer internals
     for name in (
-        "pdfminer", "pdfminer.high_level", "pdfminer.layout",
-        "pdfminer.pdfinterp", "pdfminer.pdfpage", "pdfminer.psparser",
-        "pdfminer.cmapdb"
+        "pdfminer",
+        "pdfminer.high_level",
+        "pdfminer.layout",
+        "pdfminer.pdfinterp",
+        "pdfminer.pdfpage",
+        "pdfminer.psparser",
+        "pdfminer.cmapdb",
     ):
         logging.getLogger(name).setLevel(logging.WARNING)
 
-# open sources.yaml file and parses yaml into a python dic using safe_load
-def load_cfg(path="sources.yaml"):
+
+def load_cfg(path: str = "sources.yaml"):
+    """Open sources.yaml and parse into a Python dict using safe_load."""
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
-# finding pdf stubs
+
 def find_pdf_stubs(processed_dir: str):
+    """Find Markdown stubs whose filenames end with -pdf.md in processed_dir."""
     p = Path(processed_dir)
-    # recursively find Markdown files whose filename ends with -pdf.md
     stubs = list(p.rglob("*-pdf.md"))
     logging.info("Found %d PDF stubs", len(stubs))
     if stubs[:5]:
         logging.debug("Stub samples:\n  - " + "\n  - ".join(str(s) for s in stubs[:5]))
     return stubs
 
+
 def stub_to_pdf_path(stub_md_path: Path, processed_dir: str, raw_dir: str) -> Path:
-    # processed/foo/bar/file-pdf.md  -> raw/foo/bar/file.pdf
+    """
+    Map processed/foo/bar/file-pdf.md  -> raw/foo/bar/file.pdf
+    using the same relative path structure.
+    """
     rel = Path(os.path.relpath(stub_md_path, processed_dir))
     pdf_rel = Path(str(rel).replace("-pdf.md", ".pdf"))
     return Path(raw_dir) / pdf_rel
 
+
 def clean_pdf_text(txt: str) -> str:
+    """Basic cleanup: fix hyphenated line breaks, collapse blank lines, trim."""
     txt = txt.replace("\r", "")
-    txt = re.sub(r"(\w)-\n(\w)", r"\1\2", txt)   # fix hyphen-linebreaks
-    txt = re.sub(r"\n{3,}", "\n\n", txt)         # collapse blank lines
+    # fix hyphen-linebreaks: e.g., "with-\nout" -> "without"
+    txt = re.sub(r"(\w)-\n(\w)", r"\1\2", txt)
+    # collapse 3+ blank lines into 2
+    txt = re.sub(r"\n{3,}", "\n\n", txt)
+    # strip trailing spaces on each line
     txt = "\n".join(line.strip() for line in txt.splitlines())
     return txt.strip()
 
+
 def to_markdown(txt: str) -> str:
-    return txt  # keep paragraphs as-is for now
+    """Currently just returns cleaned plain text. Left simple to avoid mangling."""
+    return txt
+
 
 def process_stub(stub_path: Path, processed_dir: str, raw_dir: str) -> bool:
+    """Convert one -pdf.md stub to a real .md by extracting from the matching PDF."""
     post = frontmatter.load(stub_path)
     pdf_path = stub_to_pdf_path(stub_path, processed_dir, raw_dir)
 
@@ -81,6 +105,7 @@ def process_stub(stub_path: Path, processed_dir: str, raw_dir: str) -> bool:
     logging.info("Wrote: %s", out_md)
     return True
 
+
 def main():
     setup_logger()
     cfg = load_cfg()
@@ -89,19 +114,26 @@ def main():
 
     stubs = find_pdf_stubs(processed_dir)
     if not stubs:
-        logging.info("No stubs to convert. If you expected some, re-run ingest/run_all.py and confirm PDFs were detected.")
+        logging.info(
+            "No stubs to convert. If you expected some, re-run ingest/run_all.py "
+            "and confirm PDFs were detected."
+        )
         return
 
-    ok = fail = 0
+    ok = 0
+    fail = 0
     for i, stub in enumerate(stubs, 1):
         if process_stub(stub, processed_dir, raw_dir):
             ok += 1
         else:
             fail += 1
         if i % 10 == 0:
-            logging.debug("Progress: %d/%d (ok=%d, fail=%d)", i, len(stubs), ok, fail)
+            logging.debug(
+                "Progress: %d/%d (ok=%d, fail=%d)", i, len(stubs), ok, fail
+            )
 
     logging.info("Done. Converted: %d, Failed: %d", ok, fail)
+
 
 if __name__ == "__main__":
     main()

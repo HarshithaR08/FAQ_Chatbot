@@ -276,9 +276,9 @@ def ask(query: str, k: int = 5, bucket_filter: str | None = None):
 if __name__ == "__main__":
     #ask("1.What is the course withdrawal deadline?", k=5)
     #ask("2.what is the Last Day to Withdraw Classes for Winter 2025",k=5)
-    #ask("3.what is the Final Day to Withdraw course for summer 2026",k=5)
+    ask("3.what is the Final Day to Withdraw course for summer 2026",k=5)
     #ask("4.what is the semester end date of Winter 2026", k=5)
-    ask("5.what are the Required Courses for MS in Computer Science",k=5)
+    #ask("5.what are the Required Courses for MS in Computer Science",k=5)
     #ask("6.How does pass/fail grading work?", k=5)
     #ask("7.How do I request a leave of absence?", k=5)
     #ask("8.How can I contact academic advising?", k=5)
@@ -295,6 +295,9 @@ if __name__ == "__main__":
     #ask("19.can you list the Masters courses i can take under SOC", k=5)
     #ask("20.what is the course withdrawl deadline for winter 2025 and Summer 2026",k=5)
     #ask("21.can u tell me more about this course CSIT 515: Software Engineering", k=5)
+    #ask("22.how many credits should i complete as a graduate student to complete the degree?", k=5)
+    #ask("what are the required courses i should be taking as a graduate student for Computer Science", k=5)
+    #ask("i have already completed 4 required courses for MS in CS , how many credits more should i take to complete my degree and suggest some electives i can take for the same?", k=5)
 
     # follow up qn:
     #ask("can you list some of the elective courses for the same",k=5)

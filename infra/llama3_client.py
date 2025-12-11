@@ -16,7 +16,7 @@ Exposes:
 
 import os
 from typing import Tuple
-from dotenv import load_dotenv   # <-- NEW
+from dotenv import load_dotenv
 
 import torch
 from transformers import (
@@ -25,8 +25,8 @@ from transformers import (
     BitsAndBytesConfig,
     pipeline,
 )
-load_dotenv()
 
+load_dotenv()
 
 # Default model (you must have HF access + license accepted)
 DEFAULT_MODEL_ID = os.environ.get(
@@ -52,6 +52,12 @@ def get_llama3_pipeline():
     if _pipe is not None:
         return _pipe, _tokenizer
 
+    # --- GPU debug info ---
+    print(f"[llama3_client] torch.cuda.is_available() = {torch.cuda.is_available()}")
+    print(f"[llama3_client] cuda device count = {torch.cuda.device_count()}")
+    if torch.cuda.is_available() and torch.cuda.device_count() > 0:
+        print(f"[llama3_client] using device 0: {torch.cuda.get_device_name(0)}")
+
     hf_token = os.environ.get("HF_TOKEN")
     if not hf_token:
         raise RuntimeError(
@@ -65,9 +71,10 @@ def get_llama3_pipeline():
     print(f"[llama3_client] Loading model (4-bit): {model_id}")
 
     # 4-bit quantization config
+    compute_dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
     bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
-        bnb_4bit_compute_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
+        bnb_4bit_compute_dtype=compute_dtype,
         bnb_4bit_use_double_quant=True,
         bnb_4bit_quant_type="nf4",
     )
@@ -80,8 +87,9 @@ def get_llama3_pipeline():
     _model = AutoModelForCausalLM.from_pretrained(
         model_id,
         token=hf_token,
-        device_map="auto",
+        device_map="auto",           # should now pick your RTX 4070
         quantization_config=bnb_config,
+        torch_dtype=compute_dtype,
     )
 
     _pipe = pipeline(

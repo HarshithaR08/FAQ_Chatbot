@@ -22,6 +22,31 @@ SOC_RX         = re.compile(r"\bsoc\b|\bschool of computing\b", re.I)
 
 ADVISOR_RX     = re.compile(r"\badvisor\b|\badvisors\b|\badvising\b|\bprogram coordinator\b", re.I)
 
+DEGREE_REQ_URL_FRAGMENT = (
+    "undergraduate-graduate-degree-requirements/undergraduate-graduate-degree-requirements.pdf"
+)
+
+DEGREE_CREDITS_RX = re.compile(
+    r"\bcredits?\b.*\b(complete|completion|graduate|graduation|finish)\b.*\bdegree\b",
+    re.IGNORECASE,
+)
+
+# ----------------------------------------
+# Degree credits heuristic
+# ----------------------------------------
+
+def looks_like_degree_credits_question(q: str) -> bool:
+    """
+    True if the question is basically:
+      'how many credits do I need to complete / finish my (graduate) degree?'
+    We don't restrict to 'graduate' only, but the pattern expects:
+      credits + (complete/finish/graduate) + degree
+    in some order.
+    """
+    if not q:
+        return False
+    return bool(DEGREE_CREDITS_RX.search(q))
+
 
 # NEW: full term parser for both season + year
 def parse_term_parts(term: str):
@@ -135,7 +160,6 @@ GRAD_CS_FALLBACK_RX = re.compile(
     r"\bgraduate\b.*\bcomputer\s+scienc|\bcomputer\s+scienc\b.*\bgraduate\b",
     re.I,
 )
-
 
 def is_program_requirements_query(q: str) -> bool:
     """
@@ -336,8 +360,8 @@ def score_candidate(c, intent: str, cfg: dict, query: str, q_term):
     text = getattr(c, "text", c.get("text", "")) or ""
     url  = getattr(c, "url", c.get("url", "")) or ""
 
-    q_lower   = (query or "").lower()
-    sec_lower = sec.lower()
+    q_lower    = (query or "").lower()
+    sec_lower  = sec.lower()
     text_lower = text.lower()
 
     is_table = bool(meta.get("table") or meta.get("is_table"))
@@ -639,6 +663,21 @@ def score_candidate(c, intent: str, cfg: dict, query: str, q_term):
     # ---- query-specific boosts (withdrawal vs semester-end, LOA, waitlist) ----
     feats += apply_query_boosts(c, query, intent)
 
+    # ---- Degree “how many credits to complete degree” heuristic ----
+    degree_bonus = 0.0
+    if looks_like_degree_credits_question(query):
+        url_for_degree = (
+            getattr(c, "url", c.get("url", "")) 
+            or meta.get("url") 
+            or meta.get("source_url") 
+            or ""
+        ).lower()
+
+        if DEGREE_REQ_URL_FRAGMENT in url_for_degree:
+            # Tune this up/down depending on how aggressively you want that PDF to float
+            degree_bonus = 0.25
+
+    base += degree_bonus
     base += rw["feats"] * feats
     return base
 

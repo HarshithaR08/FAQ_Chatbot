@@ -1,15 +1,23 @@
 # Developer: Harshitha
-# Created this script to Parse all HTML tables and save BOTH Markdown (for RAG) and JSON (for exact answers).
+# Parse all HTML tables and save BOTH Markdown (for RAG) and JSON (for exact answers).
 
-import os, json, re, io
+import os
+import json
+import re
+import io
 from pathlib import Path
 from collections import Counter
+
 from bs4 import BeautifulSoup
 import pandas as pd
 
 # -------- small helpers --------
 
-DEADLINE_WORDS = re.compile(r"(withdraw|final day|last day|drop|deadline|add\/?drop|adjustment)", re.I)
+DEADLINE_WORDS = re.compile(
+    r"(withdraw|final day|last day|drop|deadline|add\/?drop|adjustment)",
+    re.IGNORECASE,
+)
+
 
 def _normalize_html(html: str) -> str:
     """Normalize <br> and &nbsp; etc. so pandas/bs4 can parse cells better."""
@@ -21,11 +29,13 @@ def _normalize_html(html: str) -> str:
     html = re.sub(r"[ \t]{2,}", " ", html)
     return html
 
-def parse_catalog_course_blocks(soup):
+
+def parse_catalog_course_blocks(soup: BeautifulSoup):
+    """Special helper for catalog course blocks (.courseblock)."""
     out = []
     for blk in soup.select(".courseblock"):
         title = blk.select_one(".courseblocktitle")
-        desc  = blk.select_one(".courseblockdesc")
+        desc = blk.select_one(".courseblockdesc")
         prereq = None
         # Prereq sometimes sits in a <p> or as text; quick fallback:
         for p in blk.select("p"):
@@ -33,19 +43,21 @@ def parse_catalog_course_blocks(soup):
             if txt.lower().startswith("prerequisite"):
                 prereq = txt
                 break
-        out.append({
-            "code_title": title.get_text(" ", strip=True) if title else None,
-            "description": desc.get_text(" ", strip=True) if desc else None,
-            "prerequisites": prereq,
-        })
+        out.append(
+            {
+                "code_title": title.get_text(" ", strip=True) if title else None,
+                "description": desc.get_text(" ", strip=True) if desc else None,
+                "prerequisites": prereq,
+            }
+        )
     return out
 
 
-def _bs4_table_to_rows(table, page_url):
+def _bs4_table_to_rows(table, page_url: str):
     """Extract rows as 'cell1 | cell2 | ...' strings using bs4 only."""
     rows_out = []
     for tr in table.find_all("tr"):
-        cells = tr.find_all(["th","td"])
+        cells = tr.find_all(["th", "td"])
         txts = []
         for c in cells:
             # text with links collapsed to text; keep inner <br> already normalized
@@ -63,7 +75,6 @@ def _row_to_kv_text(headers, row_vals):
 
         **Start Date:** 12/23
         **End Date:** 1/15/2025
-        ...
 
     Skips empty cells.
     """
@@ -80,7 +91,7 @@ def _row_to_kv_text(headers, row_vals):
 
 
 def _emit_rows(rows, out_rows_path, section_heading, term_guess, bucket, page_url):
-    """Append mini row-chunks to a JSONL file (unused by this script’s callers directly)."""
+    """Append mini row-chunks to a JSONL file (currently unused)."""
     os.makedirs(os.path.dirname(out_rows_path), exist_ok=True)
     with open(out_rows_path, "a", encoding="utf-8") as rf:
         for r in rows:
@@ -88,32 +99,47 @@ def _emit_rows(rows, out_rows_path, section_heading, term_guess, bucket, page_ur
                 "bucket": bucket,
                 "term": term_guess or "",
                 "section_heading": section_heading or "",
-                "has_deadline_words": bool(DEADLINE_WORDS.search(r))
+                "has_deadline_words": bool(DEADLINE_WORDS.search(r)),
             }
-            rf.write(json.dumps({
-                "url": page_url,
-                "text": r,
-                "meta": meta,
-                "section_heading": section_heading or ""
-            }, ensure_ascii=False) + "\n")
+            rf.write(
+                json.dumps(
+                    {
+                        "url": page_url,
+                        "text": r,
+                        "meta": meta,
+                        "section_heading": section_heading or "",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+
 
 def most_common_normalized(items):
     if not items:
         return None
+
     def norm(x):
         x = (x or "").strip()
         return x[:1].upper() + x[1:].lower() if x else x
+
     items = [norm(i) for i in items if i]
     return Counter(items).most_common(1)[0][0]
 
-def _compile_many(cfg, key):
-    return [re.compile(rx, re.I) for rx in (cfg.get(key) or [])]
 
-TERM_FALLBACK_RE = re.compile(r"\b(Spring|Summer|Fall|Winter)\s+20\d{2}\b", re.I)
+def _compile_many(cfg, key):
+    return [re.compile(rx, re.IGNORECASE) for rx in (cfg.get(key) or [])]
+
+
+TERM_FALLBACK_RE = re.compile(
+    r"\b(Spring|Summer|Fall|Winter)\s+20\d{2}\b", re.IGNORECASE
+)
+
 
 def _guess_term_from_text(text: str):
     m = TERM_FALLBACK_RE.search(text or "")
     return m.group(0).title() if m else ""
+
 
 def _scan_months_from_df(df) -> set[int]:
     months = set()
@@ -125,11 +151,12 @@ def _scan_months_from_df(df) -> set[int]:
                 months.add(mm)
     return months
 
+
 def _infer_season_from_months(months: set[int]) -> str:
     if not months:
         return ""
     counts = {
-        "Fall":   len({9, 10, 11} & months),
+        "Fall": len({9, 10, 11} & months),
         "Spring": len({2, 3, 4, 5} & months),
         "Summer": len({6, 7, 8} & months),
         "Winter": len({12, 1} & months),
@@ -138,44 +165,43 @@ def _infer_season_from_months(months: set[int]) -> str:
     best = max(priority, key=lambda s: counts[s])
     return best if counts[best] > 0 else ""
 
+
 def _nearest_h2_h3_with_term(table_tag):
-    # prefer nearest previous h2/h3, else next; else small HTML window
+    """Find nearest h2/h3 around the table whose text contains a term like 'Fall 2025'."""
     def first_match(hlist):
         for h in hlist:
             txt = h.get_text(" ", strip=True)
             if TERM_FALLBACK_RE.search(txt or ""):
                 return txt
         return ""
-    prev = table_tag.find_all_previous(["h2","h3"], limit=6)
+
+    prev = table_tag.find_all_previous(["h2", "h3"], limit=6)
     if prev:
         t = first_match(prev)
-        if t: return t
-    nxt = table_tag.find_all_next(["h2","h3"], limit=6)
+        if t:
+            return t
+
+    nxt = table_tag.find_all_next(["h2", "h3"], limit=6)
     if nxt:
         t = first_match(nxt)
-        if t: return t
-    # last ditch: scan a window before the table’s HTML
-    try:
-        html_doc = str(table_tag.find_root())
-    except Exception:
-        html_doc = str(table_tag)
-    table_html = str(table_tag)
-    pos = html_doc.find(table_html)
-    if pos != -1:
-        window = html_doc[max(0, pos-2000):pos]
-        m = TERM_FALLBACK_RE.search(window or "")
-        if m: return m.group(0)
+        if t:
+            return t
+
     return ""
 
+
 def _detect_term_and_session(text_segments, cfg):
-    termrx  = _compile_many(cfg, "term_patterns")
-    sessrx  = _compile_many(cfg, "session_patterns")
+    termrx = _compile_many(cfg, "term_patterns")
+    sessrx = _compile_many(cfg, "session_patterns")
     terms, sessions = [], []
     for seg in text_segments:
         s = seg or ""
-        for r in termrx:  terms   += r.findall(s)
-        for r in sessrx: sessions += r.findall(s)
+        for r in termrx:
+            terms += r.findall(s)
+        for r in sessrx:
+            sessions += r.findall(s)
     return most_common_normalized(terms), most_common_normalized(sessions)
+
 
 def _looks_like_deadline_table(headers: list[str], cfg) -> bool:
     hdr = " | ".join([h or "" for h in headers]).lower()
@@ -196,6 +222,7 @@ def _looks_like_deadline_table(headers: list[str], cfg) -> bool:
         return True
     return False
 
+
 def _find_column(headers, candidates):
     hdrs = [str(h or "").lower() for h in headers]
     for i, h in enumerate(hdrs):
@@ -204,18 +231,22 @@ def _find_column(headers, candidates):
                 return i
     return None
 
+
 # -------- main entry --------
 
-def html_tables_to_markdown_and_json(html: str, out_md: Path, out_json: Path, cfg: dict, url: str):
+
+def html_tables_to_markdown_and_json(
+    html: str, out_md: Path, out_json: Path, cfg: dict, url: str
+):
     """
     Writes:
       - out_md:   appended human-readable tables (with SECTION and TERM markers)
       - out_json: summary with normalized rows
       - <base>-table-rows.jsonl : one JSON per calendar row (mini-chunks)
     """
-    # Debug log: print what patterns are actually loaded from sources.yaml
     import logging
-    logging.getLogger().setLevel(logging.INFO)
+
+    logging.getLogger(__name__).setLevel(logging.INFO)
     logging.info("deadline_header_patterns = %s", cfg.get("deadline_header_patterns"))
 
     # Normalize HTML so <br> and &nbsp; don’t break cell boundaries
@@ -264,11 +295,15 @@ def html_tables_to_markdown_and_json(html: str, out_md: Path, out_json: Path, cf
 
             # Try to render as pipe table if the first row looks like headers
             header_cells = rows[0].split(" | ")
-            looks_like_header = 1 <= len(header_cells) <= 12 and all(len(h) <= 80 for h in header_cells)
+            looks_like_header = (
+                1 <= len(header_cells) <= 12 and all(len(h) <= 80 for h in header_cells)
+            )
 
             if looks_like_header:
                 md_parts.append("| " + " | ".join(header_cells) + " |")
-                md_parts.append("| " + " | ".join(["---"] * len(header_cells)) + " |")
+                md_parts.append(
+                    "| " + " | ".join(["---"] * len(header_cells)) + " |"
+                )
                 body = rows[1:]
                 headers = header_cells
             else:
@@ -277,39 +312,47 @@ def html_tables_to_markdown_and_json(html: str, out_md: Path, out_json: Path, cf
 
             for r in body:
                 if " | " in r:
-                    md_parts.append("| " + " | ".join([c.strip() for c in r.split("|")]) + " |")
+                    md_parts.append(
+                        "| "
+                        + " | ".join([c.strip() for c in r.split("|")])
+                        + " |"
+                    )
                 else:
                     md_parts.append(r.strip())
 
             # Emit per-row JSONL (mini-chunks) as key–value lists
             for r in body:
-                row_cells = [c.strip() for c in r.split("|")] if " | " in r else [r.strip()]
+                row_cells = (
+                    [c.strip() for c in r.split("|")] if " | " in r else [r.strip()]
+                )
                 kv_text = _row_to_kv_text(headers, row_cells) if headers else r.strip()
 
                 # keep a tiny markdown version around if you want it later
                 if headers:
                     header_line = "| " + " | ".join(headers) + " |"
-                    sep_line    = "| " + " | ".join(["---"] * len(headers)) + " |"
-                    row_line    = "| " + " | ".join(row_cells) + " |"
-                    full_md     = "\n".join([header_line, sep_line, row_line])
+                    sep_line = "| " + " | ".join(["---"] * len(headers)) + " |"
+                    row_line = "| " + " | ".join(row_cells) + " |"
+                    full_md = "\n".join([header_line, sep_line, row_line])
                 else:
                     full_md = r.strip()
 
-                row_jsonl.append({
-                    "type": "table_row",
-                    "url": url,
-                    "section_heading": (heading_text or "Calendar"),
-                    "text": kv_text,
-                    "meta": {
-                        "table": True,
-                        "bucket": "",  # filled in by chunker via URL inference
-                        "term": (term_text or _guess_term_from_text(r)),
-                        "session": None,
-                        "headers": headers,
-                        "full_md": full_md,
-                        "has_deadline_words": bool(DEADLINE_WORDS.search(r))
+                row_jsonl.append(
+                    {
+                        "type": "table_row",
+                        "url": url,
+                        "section_heading": (heading_text or "Calendar"),
+                        "text": kv_text,
+                        "meta": {
+                            "table": True,
+                            "bucket": "",  # filled in by chunker via URL inference
+                            "term": (term_text or _guess_term_from_text(r)),
+                            "session": None,
+                            "headers": headers,
+                            "full_md": full_md,
+                            "has_deadline_words": bool(DEADLINE_WORDS.search(r)),
+                        },
                     }
-                })
+                )
 
             tables_found += 1
             continue  # handled this table via fallback
@@ -326,7 +369,8 @@ def html_tables_to_markdown_and_json(html: str, out_md: Path, out_json: Path, cf
         for val in df.astype(str).values.ravel():
             m = re.search(r"\b(20\d{2})\b", val)
             if m:
-                year_in_table = m.group(1); break
+                year_in_table = m.group(1)
+                break
 
         m = re.search(r"\b(20\d{2})\b", term_from_heading or "")
         year_in_heading = m.group(1) if m else ""
@@ -350,77 +394,103 @@ def html_tables_to_markdown_and_json(html: str, out_md: Path, out_json: Path, cf
         for row in df.to_dict(orient="records"):
             lower = {str(k).strip().lower(): str(v).strip() for k, v in row.items()}
             term_val = (
-                term_text or
-                lower.get("term") or
-                lower.get("part of term") or
-                lower.get("part of term & description")
+                term_text
+                or lower.get("term")
+                or lower.get("part of term")
+                or lower.get("part of term & description")
             )
             last_add = (
-                lower.get("last day to add/drop (100% adjustment)") or
-                lower.get("last day to add/drop") or
-                lower.get("last day to add or drop 100%")
+                lower.get("last day to add/drop (100% adjustment)")
+                or lower.get("last day to add/drop")
+                or lower.get("last day to add or drop 100%")
             )
             final_withdraw = (
-                lower.get("final day to withdraw") or
-                lower.get("final day to withdraw classes (50% adjustment)") or
-                lower.get("final day to withdraw classes  (50% adjustment)") or
-                lower.get("final day to wd")
+                lower.get("final day to withdraw")
+                or lower.get("final day to withdraw classes (50% adjustment)")
+                or lower.get("final day to withdraw classes  (50% adjustment)")
+                or lower.get("final day to wd")
             )
             if term_val or final_withdraw:
-                normalized_calendar.append({
-                    "term": term_val,
-                    "last_day_to_add_drop": last_add,
-                    "final_day_to_withdraw": final_withdraw
-                })
+                normalized_calendar.append(
+                    {
+                        "term": term_val,
+                        "last_day_to_add_drop": last_add,
+                        "final_day_to_withdraw": final_withdraw,
+                    }
+                )
 
         # 7) per-row mini-chunks if this *looks* like a deadline/calendar table
         if _looks_like_deadline_table(headers, cfg):
-            idx_desc  = _find_column(headers, ["part of term", "term & description", "description", "part of term & description"])
-            idx_final = _find_column(headers, ["final day to withdraw", "final day to withdraw classes", "final day to wd"])
-            idx_wait  = _find_column(headers, ["waitlist ends"])
-            
+            idx_desc = _find_column(
+                headers,
+                [
+                    "part of term",
+                    "term & description",
+                    "description",
+                    "part of term & description",
+                ],
+            )
+            idx_final = _find_column(
+                headers,
+                [
+                    "final day to withdraw",
+                    "final day to withdraw classes",
+                    "final day to wd",
+                ],
+            )
+            idx_wait = _find_column(headers, ["waitlist ends"])
+
             for row in df.astype(str).values.tolist():
                 # normalize row cells as strings
                 row_vals = [str(v).strip() for v in row]
 
                 # detect row-local term/session using cfg patterns
                 row_text = " | ".join(row_vals)
-                row_term, row_session = _detect_term_and_session([row_text, heading_text, term_text], cfg)
+                row_term, row_session = _detect_term_and_session(
+                    [row_text, heading_text, term_text], cfg
+                )
                 row_term = row_term or term_text
 
                 # Tiny markdown version (kept in meta) + KV text for retrieval
                 header_line = "| " + " | ".join(headers) + " |"
-                sep_line    = "| " + " | ".join(["---"] * len(headers)) + " |"
-                row_line    = "| " + " | ".join(row_vals) + " |"
-                full_md     = "\n".join([header_line, sep_line, row_line])
+                sep_line = "| " + " | ".join(["---"] * len(headers)) + " |"
+                row_line = "| " + " | ".join(row_vals) + " |"
+                full_md = "\n".join([header_line, sep_line, row_line])
 
                 kv_text = _row_to_kv_text(headers, row_vals)
 
-                row_jsonl.append({
-                    "type": "table_row",
-                    "url": url,
-                    "section_heading": (heading_text or "Calendar"),
-                    "text": kv_text,
-                    "meta": {
-                        "table": True,
-                        "bucket": "",  # fill at ingestion if you store it
-                        "term": row_term,
-                        "session": row_session,
-                        "final_withdraw": (
-                            row_vals[idx_final] if (idx_final is not None and idx_final < len(row_vals)) else None
-                        ),
-                        "waitlist_ends": (
-                            row_vals[idx_wait] if (idx_wait is not None and idx_wait < len(row_vals)) else None
-                        ), 
-                        "desc": (
-                            row_vals[idx_desc] if (idx_desc is not None and idx_desc < len(row_vals)) else None
-                        ),
-                        "headers": headers,
-                        "full_md": full_md,
-                        "has_deadline_words": True,
+                row_jsonl.append(
+                    {
+                        "type": "table_row",
+                        "url": url,
+                        "section_heading": (heading_text or "Calendar"),
+                        "text": kv_text,
+                        "meta": {
+                            "table": True,
+                            "bucket": "",  # fill at ingestion if you store it
+                            "term": row_term,
+                            "session": row_session,
+                            "final_withdraw": (
+                                row_vals[idx_final]
+                                if (idx_final is not None and idx_final < len(row_vals))
+                                else None
+                            ),
+                            "waitlist_ends": (
+                                row_vals[idx_wait]
+                                if (idx_wait is not None and idx_wait < len(row_vals))
+                                else None
+                            ),
+                            "desc": (
+                                row_vals[idx_desc]
+                                if (idx_desc is not None and idx_desc < len(row_vals))
+                                else None
+                            ),
+                            "headers": headers,
+                            "full_md": full_md,
+                            "has_deadline_words": True,
+                        },
                     }
-                })
-        
+                )
 
         # Count this pandas-handled table
         tables_found += 1
@@ -432,12 +502,18 @@ def html_tables_to_markdown_and_json(html: str, out_md: Path, out_json: Path, cf
 
     out_json = Path(out_json)
     out_json.parent.mkdir(parents=True, exist_ok=True)
-    out_json.write_text(json.dumps({
-        "source": "table_extractor",
-        "tables_found": int(tables_found),
-        "rows": all_raw_rows,
-        "normalized_calendar": normalized_calendar
-    }, indent=2), encoding="utf-8")
+    out_json.write_text(
+        json.dumps(
+            {
+                "source": "table_extractor",
+                "tables_found": int(tables_found),
+                "rows": all_raw_rows,
+                "normalized_calendar": normalized_calendar,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
 
     # per-row mini-chunks JSONL alongside the other outputs
     row_path = Path(str(out_json).replace("-tables.json", "-table-rows.jsonl"))

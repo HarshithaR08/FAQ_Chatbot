@@ -31,15 +31,92 @@ COURSE_LIST_NOISE = re.compile(
     flags=re.IGNORECASE
 )
 
+# ---------- NEW: normalize course lines on catalog program pages ----------
+
+COURSE_CODE_RX = re.compile(
+    r"^(CSIT|MATH|AMAT|STAT|PHYS)\s*[\u00A0 ]?\d{3}\b",
+    re.IGNORECASE,
+)
+
+def normalize_catalog_courses(md_text: str) -> str:
+    """
+    For catalog program pages, HTML->markdown often produces:
+
+        Required Courses
+        CSIT 515
+        Software Engineering
+        3
+        CSIT 545
+        Computer Architecture
+        3
+        ...
+
+    This rewrites that into single-line entries:
+
+        CSIT 515 Software Engineering (3 credits)
+        CSIT 545 Computer Architecture (3 credits)
+
+    so the LLM can safely copy exact lines.
+    """
+    lines = [ln.rstrip("\n") for ln in md_text.splitlines()]
+    out: list[str] = []
+    i = 0
+    n = len(lines)
+
+    while i < n:
+        line = lines[i]
+        stripped = line.strip()
+
+        m = COURSE_CODE_RX.match(stripped)
+        if not m:
+            out.append(line)
+            i += 1
+            continue
+
+        code = stripped
+        title = None
+        credits = None
+
+        # Look ahead for title (next non-empty line that is not another course code)
+        j = i + 1
+        while j < n and not lines[j].strip():
+            j += 1
+        if j < n and not COURSE_CODE_RX.match(lines[j].strip()):
+            title = lines[j].strip()
+            j += 1
+
+        # Look ahead for credits: a small integer on its own line
+        k = j
+        while k < n and not lines[k].strip():
+            k += 1
+        if k < n and re.fullmatch(r"\d{1,2}", lines[k].strip()):
+            credits = lines[k].strip()
+            k += 1
+
+        # Rebuild compact line
+        if title and credits:
+            out.append(f"{code} {title} ({credits} credits)")
+        elif title:
+            out.append(f"{code} {title}")
+        else:
+            out.append(code)
+
+        i = max(i + 1, j, k)
+
+    return "\n".join(out)
+
 def clean_markdown_text(text: str, source_url: str) -> str:
     """
     Apply small, source-specific cleanups before chunking.
     Currently:
       - de-duplicate 'Course List / Code / Title / Credits' noise on catalog program pages
+      - keep hook for other future source-specific cleanups
     """
     u = (source_url or "").lower()
     if "catalog.montclair.edu/programs/" in u:
         text = COURSE_LIST_NOISE.sub("Course List\nCode\nTitle\nCredits\n", text)
+        # NOTE: deeper catalog cleanup & course normalization are applied later
+        # in chunk_doc once we know the bucket.
     return text
 
 # ---------- helpers to detect tables / labels / terms ----------
@@ -126,15 +203,11 @@ _HEADER_TOKEN_SET = {"course", "list", "code", "title", "credits"}
 def _looks_like_course_header_line(s: str) -> bool:
     """
     True if a line is just combinations of 'Course/List/Code/Title/Credits'
-    (possibly repeated), e.g.
-      - 'Course List'
-      - 'Course List Code Title Credits'
-      - 'Course List Course List Code Code Title Title Credits Credits'
+    (possibly repeated).
     """
     if not s:
         return False
     tokens = re.split(r"\s+", s.strip())
-    # If *all* words are from the header token set, treat as header noise.
     return all(t.lower() in _HEADER_TOKEN_SET for t in tokens)
 
 def clean_catalog_text(text: str) -> str:
@@ -148,7 +221,6 @@ def clean_catalog_text(text: str) -> str:
     lines = text.splitlines()
     cleaned = []
 
-    # Sidebar / chrome phrases we never want in chunks
     SIDEBAR_NOISE_PHRASES = [
         "montclair state university",
         "university catalog",
@@ -170,7 +242,6 @@ def clean_catalog_text(text: str) -> str:
         "university youtube",
     ]
 
-    # Section headings that should appear at most once per chunk
     ONE_PER_CHUNK_HEADINGS = {
         "program requirements",
         "required courses",
@@ -265,16 +336,24 @@ def chunk_doc(md_text: str, meta: dict) -> List[dict]:
     bucket = meta.get("bucket", "") or ""
     tags   = meta.get("tags", [])
 
+    # EXTRA: pre-normalize course lines for catalog program pages
+    if bucket == "catalog-programs":
+        # stronger structural cleanup + course normalization
+        md_text = clean_catalog_text(md_text)
+        md_text = normalize_catalog_courses(md_text)
+
     out_chunks = []
     sections = split_by_headings(md_text) or [{"heading_path": [], "text": md_text}]
+
+    # Larger target size for catalog program pages so 'Required / Electives / Culminating'
+    # blocks tend to stay together.
+    base_target = TARGET_CHARS
+    if bucket == "catalog-programs":
+        base_target = 2200  # a bit bigger, but still manageable
 
     for s_idx, sec in enumerate(sections, 1):
         sec_text = sec["text"]
         heading_path = sec["heading_path"]
-
-        # EXTRA: per-section cleanup for catalog-programs
-        if bucket == "catalog-programs":
-            sec_text = clean_catalog_text(sec_text)
 
         # ---- if extracted-table markers exist, split per table block ----
         if "### Table " in sec_text:
@@ -302,11 +381,12 @@ def chunk_doc(md_text: str, meta: dict) -> List[dict]:
             continue
 
         # ---- Sliding window for normal prose with short-section override ----
-        if len(sec_text) <= TARGET_CHARS * 2:
+        local_target = base_target
+        if len(sec_text) <= local_target * 2:
             # keep short/medium sections intact (no splitting)
             pieces = [sec_text]
         else:
-            pieces = sliding_chunks(sec_text, TARGET_CHARS, OVERLAP_CHARS)
+            pieces = sliding_chunks(sec_text, local_target, OVERLAP_CHARS)
             
         for i, piece in enumerate(pieces, 1):
             cid = hashlib.sha1(
